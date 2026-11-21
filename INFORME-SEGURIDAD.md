@@ -315,8 +315,15 @@ error agrega capas para cuando algo se escapa.
 - **Cómo se verificó hasta ahora:** el caso CSRF existente pasó con pedido
   válido y token; `tests/csrf-regresion.test.ts` comprueba rechazo sin token,
   con token de otro visitante y con origen ajeno. Typecheck y sintaxis JS
-  aprobados; `npm test` conserva 28/28. Queda pendiente la integración
-  completa tras las demás correcciones y la verificación manual posterior.
+  aprobados; `npm test` conserva 28/28. Al reenviar manualmente el formulario
+  local que antes había creado el pedido 28, `POST /api/pedidos` devolvió
+  **403 Forbidden** con «Origen de petición no permitido»:
+  [Respuesta](evidencia/csrf-validacion/despues-csrf-pedido-respuesta.png) y
+  [Encabezados](evidencia/csrf-validacion/despues-csrf-pedido-encabezados.png).
+  Esto comprueba el rechazo **por origen** en ese intento, no la validación
+  del token por sí sola; esta última se comprobó con las regresiones.
+  Quedan pendientes las demás comprobaciones manuales y la integración
+  con los controles de sesiones.
 
 ### VUL-10 · Pedidos sin validación suficiente
 
