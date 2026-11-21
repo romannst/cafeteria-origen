@@ -260,31 +260,35 @@
   }
 
   /* --------------------------------------------------------------- reseñas */
-  function cargarReseñas() {
+    function cargarReseñas() {
     return api('/comentarios').then(function (resp) {
       var cont = $('#lista-resenas');
       if (!resp.ok || !resp.data.comentarios || resp.data.comentarios.length === 0) {
-        cont.innerHTML = '<p class="empty">Todavía no hay reseñas. ¡Sé el primero!</p>';
+        cont.replaceChildren(crearEl('p', 'empty', 'Todavía no hay reseñas. ¡Sé el primero!'));
         return;
       }
-      // FALLA (XSS almacenado): el texto de la reseña viene de la base y se
-      // inyecta con innerHTML → se ejecuta en el navegador de cada visitante.
-      cont.innerHTML = resp.data.comentarios.map(function (c) {
-        var estrellas = '';
-        var i;
-        for (i = 0; i < Number(c.calificacion || 0); i++) estrellas += '★';
-        return '' +
-          '<article class="review">' +
-          '  <div class="review-head">' +
-          '    <span class="review-author">' + raw(c.autor) + '</span>' +
-          '    <span class="review-stars">' + estrellas + '</span>' +
-          '  </div>' +
-          '  <p class="review-text">' + raw(c.texto) + '</p>' +
-          '</article>';
-      }).join('');
+
+      // Cada reseña se arma nodo por nodo. El autor y el texto vienen de la
+      // base (los escribió cualquier visitante), por eso van con textContent:
+      // un <script> guardado se muestra como texto y no se ejecuta.
+      var articulos = resp.data.comentarios.map(function (c) {
+        // La calificación se limita a un número entre 0 y 5.
+        var n = Math.min(5, Math.max(0, Math.floor(Number(c.calificacion) || 0)));
+
+        var cabecera = crearEl('div', 'review-head');
+        cabecera.append(
+          crearEl('span', 'review-author', c.autor),
+          crearEl('span', 'review-stars', '★'.repeat(n))
+        );
+
+        var articulo = crearEl('article', 'review');
+        articulo.append(cabecera, crearEl('p', 'review-text', c.texto));
+        return articulo;
+      });
+
+      cont.replaceChildren(...articulos);
     });
   }
-
   function enviarReseña(evento) {
     evento.preventDefault();
     var feedback = $('#resena-feedback');
@@ -298,7 +302,7 @@
     }).then(function (resp) {
       if (!resp.ok) {
         feedback.className = 'form-feedback is-error';
-        feedback.innerHTML = 'No se pudo publicar: ' + (resp.data.error || 'error desconocido');
+        feedback.textContent = 'No se pudo publicar: ' + (resp.data.error || 'error desconocido');
         return;
       }
       feedback.className = 'form-feedback is-ok';
