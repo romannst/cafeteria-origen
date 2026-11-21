@@ -265,18 +265,18 @@ error agrega capas para cuando algo se escapa.
 **Fallas:** VUL-09, VUL-10, VUL-11, VUL-12
 
 > Estado: línea de base registrada sobre `dev` integrado (commit `7551757`).
-> Las correcciones y su verificación **todavía están pendientes**. Esta sección
-> se completará por falla con el mismo formato de la sección XSS.
+> Las correcciones están en curso; las verificaciones parciales no sustituyen
+> las pruebas manuales posteriores ni la coordinación de controles compartidos.
 
 ### VUL-09 · Operaciones sin protección CSRF
 
 - **Qué es y por qué importa:** otra página puede inducir peticiones que
   modifican datos sin que la persona haya iniciado esa acción.
 - **Dónde:** `src/routes/pedidos.routes.ts`, `comentarios.routes.ts`,
-  `admin.routes.ts`, `auth.routes.ts`; integración pendiente en
-  `src/public/js/app.js` y `admin.js`.
-- **Por qué ocurre:** no hay token anti-CSRF emitido y validado por el servidor
-  en las peticiones que cambian estado. El frontend no lo envía.
+  `admin.routes.ts`, `auth.routes.ts`, `src/public/js/app.js` y `admin.js`.
+- **Por qué ocurría:** antes de la corrección no había token anti-CSRF emitido
+  y validado por el servidor en las peticiones que cambian estado; el
+  frontend tampoco lo enviaba.
 - **Cómo se observó manualmente:** se abrió una página HTML local ajena a la
   aplicación y se envió una sola vez, pulsando el botón, un formulario sin
   token a `POST http://localhost:8080/api/pedidos`. A diferencia del ejemplo
@@ -315,8 +315,8 @@ error agrega capas para cuando algo se escapa.
 - **Cómo se verificó hasta ahora:** el caso CSRF existente pasó con pedido
   válido y token; `tests/csrf-regresion.test.ts` comprueba rechazo sin token,
   con token de otro visitante y con origen ajeno. Typecheck y sintaxis JS
-  aprobados. Quedan pendientes las pruebas funcionales y la integración
-  completa tras las demás correcciones.
+  aprobados; `npm test` conserva 28/28. Queda pendiente la integración
+  completa tras las demás correcciones y la verificación manual posterior.
 
 ### VUL-10 · Pedidos sin validación suficiente
 
@@ -324,8 +324,8 @@ error agrega capas para cuando algo se escapa.
   inválidos pueden acabar en errores internos en vez de rechazarse.
 - **Dónde:** `src/services/pedidos.service.ts` y
   `src/routes/pedidos.routes.ts`.
-- **Por qué ocurre:** la entrada HTTP no se valida en tiempo de ejecución antes
-  de procesarla o persistirla; los tipos TypeScript no validan una petición.
+- **Por qué ocurría:** la entrada HTTP no se validaba en tiempo de ejecución
+  antes de procesarla o persistirla; los tipos TypeScript no validan peticiones.
 - **Cómo se observó manualmente:** se cambió `origen.carrito` en Local Storage,
   se recargó el sitio y se envió un pedido por la interfaz. En la primera
   observación, la **Vista previa** de Network mostraba el pedido **13**,
@@ -363,17 +363,23 @@ error agrega capas para cuando algo se escapa.
 - **Otras observaciones automatizadas:** el test creó un pedido con total
   negativo (`-28700.00`) y una cantidad `"muchos"` produjo HTTP 500.
   Estos resultados se distinguen de las demostraciones manuales anteriores.
-- **Corrección y decisiones:** pendientes; validar forma de los items,
-  enteros positivos acotados, IDs, mesa, cliente y estados en el servidor.
-  Coordinar `pedidos.service.ts` con el trabajo de parametrización SQL.
-- **Cómo se verifica:** pendiente; probar los datos inválidos **con token
-  CSRF válido**, y comprobar que los pedidos correctos siguen funcionando.
+- **Corrección y decisiones (en curso):** `src/validacion.ts` comprueba la
+  forma de los items, IDs enteros positivos, cantidades entre 1 y 100,
+  hasta 20 items, mesa numérica (1–10 caracteres), nombre (2–40) y estados
+  permitidos antes de escribir. La ruta transforma los números recibidos
+  de formularios a números reales; un producto inexistente devuelve 400.
+  Coordinar los cambios puntuales en `pedidos.service.ts` con el trabajo de
+  parametrización SQL.
+- **Cómo se verificó hasta ahora:** `tests/validacion-regresion.test.ts`
+  envió token CSRF válido, obtuvo 400 para −5, `"abc"`, cero, decimal y 101,
+  comprobó que no aparecieron pedidos de la prueba y creó correctamente un
+  pedido legítimo. `npm test` aprobó 28/28; falta la prueba manual posterior.
 
 ### VUL-11 · Reseñas sin límite de longitud
 
 - **Dónde:** `src/routes/comentarios.routes.ts`.
-- **Por qué ocurre:** no se limita el tipo ni la longitud de los campos antes
-  de guardar la reseña.
+- **Por qué ocurría:** no se limitaba el tipo ni la longitud de los campos
+  antes de guardar la reseña.
 - **Cómo se observó manualmente:** se quitó temporalmente `maxlength="280"`
   del campo de texto en DevTools y se envió una reseña de 50.000 caracteres
   `A` desde la interfaz, con autor ficticio `Prueba Roman P3` y calificación
@@ -386,15 +392,17 @@ error agrega capas para cuando algo se escapa.
   [Encabezados](evidencia/csrf-validacion/antes-resena-extensa-encabezados.png).
   Conservar la reseña. Por separado, el test existente había guardado una
   reseña de 5000 caracteres.
-- **Corrección y verificación:** pendientes. Validar los campos en el servidor;
-  repetir el caso excesivo con token válido y comprobar que una reseña normal
-  se acepta y sigue mostrándose como texto tras la corrección XSS.
+- **Corrección y verificación (en curso):** `src/validacion.ts` exige autor
+  entre 2 y 40 caracteres, texto entre 3 y 280 y calificación entera de 1 a
+  5 en el servidor. La prueba de regresión, con token válido, rechazó 50.000
+  caracteres con 400 y aceptó una reseña normal con 201. Pendiente comprobar
+  visualmente que se siga mostrando como texto tras el cambio XSS.
 
 ### VUL-12 · Subida de archivos sin restricciones
 
 - **Dónde:** `src/routes/admin.routes.ts`, endpoint
   `POST /api/admin/subir-archivo`; publicación en `src/app.ts`.
-- **Por qué ocurre:** se acepta contenido base64 y el nombre provisto por el
+- **Por qué ocurría:** se aceptaba contenido base64 y el nombre provisto por el
   cliente sin comprobar formato real, extensión, tamaño ni ruta de destino.
 - **Cómo se observó manualmente:** desde Productos → «Subir imagen», se envió
   el archivo inocuo `prueba-roman-subida.html` a la instalación local. La
@@ -412,10 +420,18 @@ error agrega capas para cuando algo se escapa.
   Por separado, el test existente aceptó `/uploads/prueba.html`; falló en
   la primera aserción y **no** verificó dinámicamente la escritura fuera de
   `uploads/`.
-- **Corrección y verificación:** pendientes. Restringir los formatos de imagen,
-  comprobar los bytes reales, limitar tamaño y generar nombres en el servidor;
-  aceptar imágenes válidas y rechazar contenido activo, tamaños excesivos y
-  rutas manipuladas. Coordinar la ruta compartida con el trabajo de configuración.
+- **Corrección y verificación (en curso):** sólo se admite PNG RGB/RGBA de
+  8 bits con extensión `.png`, base64 válido, firma y estructura de chunks/CRC
+  coherentes y datos de imagen descomprimibles; hasta 2 MB, con dimensiones y
+  salida descomprimida acotadas. Se genera un nombre UUID en el servidor y se
+  escribe con exclusividad en `uploads/` sin usar el nombre recibido como
+  ruta. Se decidió **no aceptar SVG ni JPEG** en este bloque: PNG cubre el
+  uso de imagen sin incorporar formatos activos. La publicación de
+  `/uploads/` añade `nosniff`, CSP `sandbox` y descarga forzada para archivos
+  anteriores no PNG, sin borrar la demostración. La prueba de regresión con
+  sesión y token válidos rechazó HTML y contenido no PNG, aceptó un PNG
+  generado y comprobó su lectura. Coordinar la publicación compartida con
+  el trabajo de configuración; falta la verificación integral.
 
 ### Verificación inicial sobre el código integrado
 
@@ -429,13 +445,38 @@ Ejecutada antes de corregir esta sección, en la rama `roman-strizzi` desde
 | Bloques CSRF y Validación de entrada de `seguridad.test.ts` | 0/5; fallan como se espera en la base vulnerable | [`antes-test-seguridad.txt`](evidencia/csrf-validacion/antes-test-seguridad.txt) |
 | `npm run check:security` | 5/37 controles críticos; 32 pendientes y 5 recomendados pendientes | [`antes-check-security.txt`](evidencia/csrf-validacion/antes-check-security.txt) |
 
-La batería completa de seguridad y las verificaciones **después** de corregir
-siguen pendientes. El checklist ya marca `VAL-01` en verde por el control de ID
+En esta línea de base aún no se había ejecutado la batería completa de
+seguridad ni las verificaciones posteriores. El checklist ya marcaba `VAL-01`
+en verde por el control de ID
 incorporado por XSS; `CSRF-02` (cookie) depende del trabajo de sesiones y
 `VAL-06` (stack traces) del trabajo de configuración. Los logs iniciales de
 una ejecución anterior al pull se conservan fuera del repositorio en
 `D:\OpenCode\cafeteria-local\`; los archivos enlazados arriba corresponden
 únicamente a la ejecución sobre la base integrada.
+
+### Verificación parcial después de las correcciones propias
+
+Las pruebas se ejecutaron con Docker local y no borraron los pedidos ni las
+reseñas de demostración; las regresiones eliminaron únicamente sus datos
+marcados. Se mantiene pendiente la verificación manual posterior en el
+navegador y la integración de los cambios compartidos.
+
+| Prueba | Resultado | Registro |
+|---|---|---|
+| `npm test` | 28/28 ✔ | [`despues-npm-test.txt`](evidencia/csrf-validacion/despues-npm-test.txt) |
+| `npm run typecheck` | Sin errores ✔ | [`despues-typecheck.txt`](evidencia/csrf-validacion/despues-typecheck.txt) |
+| Regresiones propias de CSRF, validación y subidas | 9/9 ✔; entradas inválidas probadas con token válido | [`despues-regresiones.txt`](evidencia/csrf-validacion/despues-regresiones.txt) |
+| `npm run check:security` | 10/37 controles críticos aprobados; resultado global **fallido** por controles de otros bloques y dependencias `CSRF-02` y `VAL-06` | [`despues-check-security.txt`](evidencia/csrf-validacion/despues-check-security.txt) |
+
+Además pasaron los dos casos específicos de CSRF y archivos de
+`tests/seguridad.test.ts`
+([registro](evidencia/csrf-validacion/despues-test-seguridad-seleccion.txt)).
+El resto del bloque de validación de esa batería
+no constituye evidencia suficiente por sí solo: sus peticiones inválidas
+no mandan token y podrían recibir 403 por CSRF en vez de 400 por validación.
+Por eso se añadieron regresiones propias con token y comprobación explícita
+de estado 400. `VAL-06` sigue dependiendo del manejador compartido de
+errores y `CSRF-02` de la configuración de la cookie de sesión.
 
 ### Reflexión
 

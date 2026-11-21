@@ -1,0 +1,146 @@
+
+> cafeteria-origen@1.0.0 check:security
+> node --import tsx scripts/check-security.ts
+
+
+  CHECKLIST DE SEGURIDAD — CAFETERÍA ORIGEN
+  ────────────────────────────────────────────────────────────
+
+  INYECCIÓN SQL
+    ✘ SQLI-01   Ninguna consulta SQL interpola la entrada del usuario
+               → se encontró en src/services/catalogo.service.ts:40, src/services/pedidos.service.ts:98, src/services/reportes.service.ts:82, src/services/usuarios.service.ts:42
+                 src/services/catalogo.service.ts:40  ` AND tipo = '${
+                 src/services/pedidos.service.ts:98  ` WHERE mesa = '${
+                 src/services/reportes.service.ts:82  ` SELECT pr.variedad, pr.nombre, SUM(pi.cantidad) AS unidades, SUM(pi.cantidad * pi.precio
+               Qué hacer: No debe aparecer SQL con ${...} dentro. Usar consultas parametrizadas ($1, $2, ...) y valores por separado. Excepción: la lista de columnas de un UPDATE puede armarse con .join() si cada campo sale de una lista blanca.
+    ✔ SQLI-02   La capa de servicios usa consultas parametrizadas
+    ✘ SQLI-03   La base de datos no acepta conexiones sin contraseña
+               → se encontró en docker-compose.yml:29
+                 docker-compose.yml:29  POSTGRES_HOST_AUTH_METHOD: trust
+               Qué hacer: En docker-compose.yml no debe estar POSTGRES_HOST_AUTH_METHOD: trust (acepta cualquier conexión sin clave).
+    ✔ SQLI-04   El puerto de la base de datos no está publicado al host
+    ✘ SQLI-05   La aplicación no se conecta con el superusuario
+               → se encontró en docker-compose.yml:60
+                 docker-compose.yml:60  DB_USER: postgres
+               Qué hacer: DB_USER no debe ser "postgres". Usar el usuario de aplicación con permisos reducidos (origen_app).
+
+  XSS
+    ✔ XSS-01    El cliente no inyecta datos con innerHTML
+    ✘ XSS-02    Los mensajes de error del servidor no reflejan la entrada
+               → se encontró en src/routes/auth.routes.ts:39, src/middleware/errores.ts:18
+                 src/routes/auth.routes.ts:39  error: `El usuario "${
+                 src/middleware/errores.ts:18  error: `Ruta no encontrada: ${
+               Qué hacer: Un mensaje de error que incluye lo que mandó el cliente es un vector de XSS reflejado. Usar mensajes genéricos.
+    ✘ XSS-03    Hay una Content Security Policy configurada
+               → no se encontró la implementación
+               Qué hacer: Configurar helmet con contentSecurityPolicy (script-src, object-src "none", etc.) como capa extra frente al XSS.
+    ✔ XSS-04    El contenido enviado por el usuario se acota en el servidor
+
+  CSRF
+    ✔ CSRF-01   Existe un token anti-CSRF
+    ✘ CSRF-02   La cookie de sesión usa SameSite
+               → no se encontró la implementación
+               Qué hacer: Configurar sameSite: "lax" (o "strict") en la cookie de sesión.
+    ✔ CSRF-03   Se verifica el origen de las peticiones que cambian estado
+    ✔ CSRF-04   Las operaciones que cambian estado no se hacen con GET
+
+  VALIDACIÓN DE ENTRADA
+    ✔ VAL-01    Los ids de las rutas se validan como enteros
+    ✔ VAL-02    Se validan tipo, longitud y rango de las entradas
+    ✔ VAL-03    Se usan listas blancas de valores permitidos
+    ✔ VAL-04    La carga de archivos valida la extensión
+    ✔ VAL-05    La carga de archivos limita el tamaño
+    ✘ VAL-06    No se filtran stack traces al cliente
+               → se encontró en src/middleware/errores.ts:30
+                 src/middleware/errores.ts:30  stack: err.stack
+               Qué hacer: El manejador de errores debe responder con un mensaje genérico y dejar el detalle real en el log del servidor.
+
+  AUTENTICACIÓN Y SESIONES
+    ✘ AUTH-01   Las contraseñas se hashean con bcrypt y salt
+               → no se encontró la implementación
+               Qué hacer: Usar bcryptjs (ya instalado) para hashear y comparar contraseñas. Nunca guardar el texto plano.
+    ✘ AUTH-02   La carga inicial de usuarios hashea las contraseñas
+               → no se encontró la implementación
+               Qué hacer: Los usuarios de ejemplo deben guardarse con la contraseña hasheada (bcrypt.hash) y no en texto plano.
+    ✘ AUTH-03   El login compara la contraseña con bcrypt
+               → no se encontró la implementación
+               Qué hacer: Usar bcrypt.compare(contraseñaIngresada, hashGuardado).
+    ✘ AUTH-04   Hay protección contra fuerza bruta
+               → no se encontró la implementación
+               Qué hacer: Aplicar rate limiting con express-rate-limit (ya instalado) sobre el endpoint de login, con límite por IP y por cuenta.
+    ✘ AUTH-05   La cookie de sesión es HttpOnly
+               → no se encontró la implementación
+               Qué hacer: res.cookie("sid", id, { httpOnly: true, secure: true, sameSite: "lax", ... }).
+    ✘ AUTH-06   La cookie de sesión es Secure y SameSite
+               → no se encontró la implementación
+               Qué hacer: Agregar secure y sameSite a la configuración de la cookie. La bandera Secure puede activarse por entorno (por ejemplo secure: process.env.NODE_ENV === "production"), para que la demo local sobre HTTP siga funcionando.
+    ✘ AUTH-07   El identificador de sesión no es un contador
+               → se encontró en src/middleware/sesion.ts:30
+                 src/middleware/sesion.ts:30  contadorSesiones
+               Qué hacer: Un id incremental (sesion_1, sesion_2...) se adivina al instante. Usar crypto.randomUUID() o crypto.randomBytes().
+    ✘ AUTH-08   El identificador de sesión es aleatorio
+               → no se encontró la implementación
+               Qué hacer: Generar el id con crypto.randomUUID() o crypto.randomBytes().
+    ✘ AUTH-09   Las sesiones tienen fecha de vencimiento
+               → se encontró en src/middleware/sesion.ts:58
+                 src/middleware/sesion.ts:58  expiraEn: null
+               Qué hacer: No dejar la expiración en null: definir un TTL (por inactividad y absoluto).
+    ✘ AUTH-10   La expiración de la sesión está calculada
+               → no se encontró la implementación
+               Qué hacer: Calcular el vencimiento (Date.now() + TTL) y rechazar las sesiones vencidas.
+    ✘ AUTH-11   El logout invalida la sesión en el servidor
+               → no se encontró la implementación
+               Qué hacer: Al cerrar sesión hay que borrar la sesión del almacén del servidor, no sólo la cookie del navegador.
+    ✘ AUTH-12   Los mensajes de login son genéricos
+               → se encontró en src/routes/auth.routes.ts:35
+                 src/routes/auth.routes.ts:35  La contraseña es incorrecta
+               Qué hacer: No distinguir entre "usuario inexistente" y "contraseña incorrecta": responder siempre lo mismo.
+    ○ AUTH-13   No hay credenciales triviales de fábrica
+               → se encontró en src/inicializar.ts:24, src/config.ts:38
+                 src/inicializar.ts:24  password: 'admin'
+                 src/config.ts:38  password: 'admin'
+               Qué hacer: Las cuentas de ejemplo no deberían usar contraseñas triviales (admin/admin, cliente/cliente...) ni quedar activadas por defecto en producción.
+    ✘ AUTH-14   Las rutas de administración exigen el rol admin
+               → no se encontró la implementación
+               Qué hacer: Aplicar requiereRol("admin") a las rutas de administración: si no, cualquiera autenticado (incluso con rol "cliente") entra al panel.
+    ○ AUTH-15   El rol de un usuario no se acepta sin verificar
+               → no se encontró la implementación
+               Qué hacer: La actualización de usuarios debe comprobar el rol de quien la pide antes de cambiar el campo "rol" (escalada de privilegios).
+
+  INYECCIÓN DE COMANDOS
+    ✘ CMD-01    No se ejecutan comandos con la entrada del usuario
+               → se encontró en src/routes/admin.routes.ts:157
+                 src/routes/admin.routes.ts:157  exec(
+               Qué hacer: No usar child_process.exec() con datos del usuario: usar spawn() con argumentos separados y shell: false.
+    ✘ CMD-02    El comando se ejecuta sin shell y con argumentos separados
+               → no se encontró la implementación
+               Qué hacer: Usar spawn("ping", ["-c", "3", host], { shell: false }).
+    ✘ CMD-03    El host se valida contra una lista blanca
+               → no se encontró la implementación
+               Qué hacer: Sólo se permite consultar a los servidores de proveedor conocidos: el resto se rechaza.
+
+  CONFIGURACIÓN
+    ✘ CFG-01    Se usan cabeceras de seguridad (helmet)
+               → no se encontró la implementación
+               Qué hacer: helmet ya está instalado: app.use(helmet({ contentSecurityPolicy: {...} })).
+    ✘ CFG-02    No hay secretos escritos en el código
+               → se encontró en src/config.ts:27
+                 src/config.ts:27  || 'postgres'
+               Qué hacer: El secreto de sesión y la contraseña de la base deben venir de process.env, sin valores por defecto escritos a mano.
+    ✘ CFG-03    El endpoint de diagnóstico está protegido
+               → no se encontró la implementación
+               Qué hacer: /api/_diagnostico no puede quedar abierto a cualquiera: debe exigir sesión (y rol admin) o eliminarse.
+    ✘ CFG-04    El diagnóstico no filtra variables de entorno
+               → se encontró en src/routes/debug.routes.ts:21
+                 src/routes/debug.routes.ts:21  process.env
+               Qué hacer: No devolver process.env completo ni credenciales en la respuesta.
+    ○ CFG-05    El contenedor no corre como root
+               → no se encontró la implementación
+               Qué hacer: Crear un usuario sin privilegios en el Dockerfile y usarlo con USER.
+
+  ────────────────────────────────────────────────────────────
+  ✘ Faltan 27 control(es) crítico(s): 10/37.
+  ○ 3 control(es) recomendado(s) pendientes.
+
+  Recordá: este script sólo analiza el código. No explotás nada,
+  observás los síntomas desde la interfaz y recién ahí corregís.
