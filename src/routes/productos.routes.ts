@@ -44,11 +44,10 @@ router.get('/variedades', async (req, res, next) => {
 
 /**
  * GET /api/productos/:id
- * Devuelve un producto.
- *
+ * Devuelve un producto. 
  * FALLA — Inyección SQL en el id (el id se mete en la consulta entre comillas).
- * 
- */
+ **/
+
 router.get('/:id', async (req, res, next) => {
   try {
     // Solo se aceptan ids enteros positivos: cualquier otra cosa

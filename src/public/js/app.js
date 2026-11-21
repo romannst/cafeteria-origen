@@ -185,7 +185,6 @@
     renderCarrito();
   }
 
-
   function renderCarrito() {
     var cont = $('#carrito');
     var lista = $('#resumen-carrito');
@@ -255,7 +254,6 @@
       }),
     }).then(function (resp) {
       if (!resp.ok) {
-
         feedback.className = 'form-feedback is-error';
         feedback.textContent = 'No pudimos enviar el pedido: ' + (resp.data.error || 'error desconocido');
         return;
@@ -303,6 +301,7 @@
       cont.replaceChildren(...articulos);
     });
   }
+  
   function enviarReseña(evento) {
     evento.preventDefault();
     var feedback = $('#resena-feedback');
