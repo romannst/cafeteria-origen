@@ -24,11 +24,22 @@ const app = express();
  *  - política de CORS restringida al propio origen
  *  - helmet CSP además sirve como capa extra frente al XSS
  */
+app.use('/api/admin/subir-archivo', express.json({ limit: '3mb' }));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Archivos subidos por el panel de administración.
-app.use('/uploads', express.static(config.uploadsDir));
+app.use('/uploads', express.static(config.uploadsDir, {
+  setHeaders(res, archivo) {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', 'sandbox');
+    // Los archivos HTML de las demostraciones anteriores permanecen, pero
+    // ya no deben renderizarse como páginas del mismo origen.
+    if (path.extname(archivo).toLowerCase() !== '.png') {
+      res.setHeader('Content-Disposition', 'attachment');
+    }
+  },
+}));
 
 // Sitio web estático
 app.use(express.static(path.join(__dirname, 'public')));

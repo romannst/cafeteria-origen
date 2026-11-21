@@ -1,6 +1,7 @@
 import express from 'express';
 import fs from 'fs';
 import path from 'path';
+import { randomUUID } from 'crypto';
 import { exec } from 'child_process';
 
 import config from '../config';
@@ -8,6 +9,7 @@ import * as catalogo from '../services/catalogo.service';
 import * as usuarios from '../services/usuarios.service';
 import { requiereSesion, requiereRol } from '../middleware/auth';
 import type { Usuario } from '../tipos';
+import { imagenPng, MAX_BYTES } from '../validacion-archivo';
 
 const router = express.Router();
 
@@ -165,19 +167,17 @@ router.post('/probar-conexion', (req, res) => {
  * POST /api/admin/subir-archivo
  *
  * -----------------------------------------------------------------------------
- * FALLA — Carga de archivos sin restricciones (OWASP A04:2021)
+  * Línea de base: carga de archivos sin restricciones (OWASP A04:2021).
  * -----------------------------------------------------------------------------
- * No se valida la extensión, el tipo MIME ni el tamaño del archivo, y se
- * guarda con el nombre que manda el cliente (además sin sanitizar "../", lo
- * que permite escribir fuera de la carpeta de subidas). Los archivos subidos
- * se sirven con express.static desde el mismo origen.
+  * Ahora sólo acepta PNG RGB/RGBA verificados y acotados; el nombre lo genera
+  * el servidor. Los archivos anteriores no se borran, pero se descargan si
+  * no son PNG.
  *
- * Corrección: validar extensión contra lista blanca (.png/.jpg/.svg saneado),
- * verificar el tipo MIME real, limitar el tamaño, generar un nombre aleatorio
- * y guardar fuera del árbol web.
+  * La carpeta uploads está fuera del árbol de archivos públicos, y sólo se
+  * sirve por la ruta controlada en app.ts.
  * -----------------------------------------------------------------------------
  */
-router.post('/subir-archivo', express.json({ limit: '8mb' }), (req, res, next) => {
+router.post('/subir-archivo', (req, res, next) => {
   try {
     const { nombre, contenidoBase64 } = req.body || {};
 
@@ -185,17 +185,26 @@ router.post('/subir-archivo', express.json({ limit: '8mb' }), (req, res, next) =
       return res.status(400).json({ error: 'Falta el archivo.' });
     }
 
-    // FALLA: sin validación de extensión, MIME ni tamaño.
-    const buffer = Buffer.from(contenidoBase64, 'base64');
+    if (typeof nombre !== 'string' || path.basename(nombre) !== nombre ||
+      path.win32.basename(nombre) !== nombre ||
+      path.extname(nombre).toLowerCase() !== '.png' ||
+      typeof contenidoBase64 !== 'string' ||
+      contenidoBase64.length > Math.ceil(MAX_BYTES / 3) * 4) {
+      return res.status(400).json({ error: 'Sólo se aceptan PNG de hasta 2 MB.' });
+    }
+    const buffer = imagenPng(nombre, contenidoBase64);
+    if (!buffer) {
+      return res.status(400).json({ error: 'Sólo se aceptan PNG válidos de hasta 2 MB.' });
+    }
     fs.mkdirSync(config.uploadsDir, { recursive: true });
 
-    // FALLA: nombre tomado del cliente sin sanear (path traversal).
-    const destino = path.join(config.uploadsDir, nombre);
-    fs.writeFileSync(destino, buffer);
+    const archivo = `${randomUUID()}.png`;
+    const destino = path.join(config.uploadsDir, archivo);
+    fs.writeFileSync(destino, buffer, { flag: 'wx' });
 
     res.json({
       mensaje: 'Archivo subido.',
-      url: `/uploads/${nombre}`,
+      url: `/uploads/${archivo}`,
       bytes: buffer.length,
     });
   } catch (err) {
