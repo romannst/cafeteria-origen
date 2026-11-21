@@ -48,7 +48,7 @@ El trabajo está terminado cuando los tres comandos dan verde:
 docker compose exec app npm test
 docker compose exec app npm run test:seguridad
 docker compose exec app npm run check:security
-
+```
 
 
 ---
