@@ -11,6 +11,47 @@ y los tests pasan. Sobre esa base hay **fallas de seguridad reales** (OWASP Top 
 que los alumnos tienen que encontrar, observar, explicar y corregir.
 
 ---
+## Grupo 04
+
+- Castellini, Nicolás
+- Oela, Ramiro
+- Peralta, Julián
+- Ramos, Nikolás
+- Strizzi, Román
+
+### Reparto de tareas
+
+| # | Tema | Fallas | Archivos principales |
+|---|---|---|---|
+| 1 | Inyección SQL | VUL-01 a VUL-04 | `services/usuarios`, `catalogo`, `pedidos`, `reportes` |
+| 2 | XSS y seguridad del frontend | VUL-05 a VUL-08 | `public/js/app.js`, `admin.js`, mensajes de `routes/` |
+| 3 | CSRF y validación de entrada | VUL-09 a VUL-12 | `routes/`, `pedidos.service.ts`, middleware CSRF |
+| 4 | Autenticación, sesiones y permisos | VUL-13 a VUL-21, VUL-27, VUL-28 | `auth.routes.ts`, `middleware/sesion.ts`, `auth.ts`, `inicializar.ts` |
+| 5 | Configuración y protección del servidor | VUL-22 a VUL-26 | `admin.routes.ts`, `debug.routes.ts`, `errores.ts`, `app.ts`, Docker |
+
+ La evidencia de los tests (antes y después) está en la carpeta [`evidencia/`](evidencia/).
+
+### Flujo de trabajo con Git
+
+- `master`: versión final para la entrega.
+- `dev`: integración de los trabajos de todos.
+- Una rama por integrante, creada desde `dev`. Los cambios se integran con un
+  **Pull Request hacia `dev`**. Al final, `dev` se pasa a `master`.
+- Commits con [Conventional Commits](https://www.conventionalcommits.org/es/):
+  `fix(xss): ...`, `fix(sqli): ...`, `docs(informe): ...`, etc.
+
+### Verificación final
+
+El trabajo está terminado cuando los tres comandos dan verde:
+
+```bash
+docker compose exec app npm test
+docker compose exec app npm run test:seguridad
+docker compose exec app npm run check:security
+```
+
+
+---
 
 ## 1. Levantar el proyecto
 

@@ -1,0 +1,734 @@
+
+> cafeteria-origen@1.0.0 test:seguridad
+> node --import tsx --test --test-concurrency=1 tests/seguridad.test.ts tests/seguridad-login.test.ts tests/seguridad-fuerza-bruta.test.ts
+
+TAP version 13
+# Subtest: Seguridad · Fuerza bruta
+    # Subtest: el login bloquea o limita los intentos repetidos
+    not ok 1 - el login bloquea o limita los intentos repetidos
+      ---
+      duration_ms: 130.725823
+      type: 'test'
+      location: '/app/tests/seguridad-fuerza-bruta.test.ts:2:1207'
+      failureType: 'testCodeFailure'
+      error: 'La API aceptó 10 intentos de login fallidos seguidos sin bloquear ni limitar nada (fuerza bruta ilimitada). Aplicá rate limiting con express-rate-limit sobre /api/auth/login.'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: true
+      actual: false
+      operator: '=='
+      stack: |-
+        TestContext.<anonymous> (/app/tests/seguridad-fuerza-bruta.test.ts:52:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Promise.all (index 0)
+        async Suite.run (node:internal/test_runner/test:1442:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: el login correcto sigue funcionando después de un bloqueo
+    ok 2 - el login correcto sigue funcionando después de un bloqueo
+      ---
+      duration_ms: 7.524347
+      type: 'test'
+      ...
+    1..2
+not ok 1 - Seguridad · Fuerza bruta
+  ---
+  duration_ms: 204.831501
+  type: 'suite'
+  location: '/app/tests/seguridad-fuerza-bruta.test.ts:2:981'
+  failureType: 'subtestsFailed'
+  error: '1 subtest failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: Seguridad · Login
+    # Subtest: los mensajes de login son genéricos (sin enumeración de usuarios)
+    not ok 1 - los mensajes de login son genéricos (sin enumeración de usuarios)
+      ---
+      duration_ms: 77.155541
+      type: 'test'
+      location: '/app/tests/seguridad-login.test.ts:2:1200'
+      failureType: 'testCodeFailure'
+      error: |-
+        Los mensajes distinguen entre "usuario inexistente" (El usuario "usuario-que-no-existe-xyz" no existe en el sistema.) y "contraseña incorrecta" (La contraseña es incorrecta.): permite enumerar usuarios.
+        + actual - expected
+        
+        + 'El usuario "usuario-que-no-existe-xyz" no existe en el sistema.'
+        - 'La contraseña es incorrecta.'
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 'La contraseña es incorrecta.'
+      actual: 'El usuario "usuario-que-no-existe-xyz" no existe en el sistema.'
+      operator: 'strictEqual'
+      stack: |-
+        TestContext.<anonymous> (/app/tests/seguridad-login.test.ts:50:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Promise.all (index 0)
+        async Suite.run (node:internal/test_runner/test:1442:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: el login NO acepta el bypass con payload SQL
+    not ok 2 - el login NO acepta el bypass con payload SQL
+      ---
+      duration_ms: 22.116867
+      type: 'test'
+      location: '/app/tests/seguridad-login.test.ts:2:1995'
+      failureType: 'testCodeFailure'
+      error: `El login devolvió 200 con el payload "' OR 1=1 --": la inyección SQL del login sigue abierta (servicios/usuarios.service.ts).`
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 200
+      actual: 200
+      operator: 'notStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (/app/tests/seguridad-login.test.ts:62:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: el login NO acepta el payload que comenta la contraseña
+    not ok 3 - el login NO acepta el payload que comenta la contraseña
+      ---
+      duration_ms: 16.836132
+      type: 'test'
+      location: '/app/tests/seguridad-login.test.ts:2:2517'
+      failureType: 'testCodeFailure'
+      error: `El login aceptó "admin'--" sin contraseña válida.`
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 200
+      actual: 200
+      operator: 'notStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (/app/tests/seguridad-login.test.ts:74:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    1..3
+not ok 2 - Seguridad · Login
+  ---
+  duration_ms: 195.884253
+  type: 'suite'
+  location: '/app/tests/seguridad-login.test.ts:2:981'
+  failureType: 'subtestsFailed'
+  error: '3 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: Seguridad · Inyección SQL
+    # Subtest: la búsqueda del catálogo NO se puede ampliar con SQL
+    not ok 1 - la búsqueda del catálogo NO se puede ampliar con SQL
+      ---
+      duration_ms: 33.725482
+      type: 'test'
+      location: '/app/tests/seguridad.test.ts:2:3589'
+      failureType: 'testCodeFailure'
+      error: |-
+        La búsqueda devolvió 20 productos (20 que no contienen el texto buscado): el payload sigue inyectando SQL en el catálogo.
+        
+        20 !== 0
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 0
+      actual: 20
+      operator: 'strictEqual'
+      stack: |-
+        TestContext.<anonymous> (/app/tests/seguridad.test.ts:175:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Promise.all (index 0)
+        async Suite.run (node:internal/test_runner/test:1442:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: el filtro por origen NO se puede ampliar con SQL
+    not ok 2 - el filtro por origen NO se puede ampliar con SQL
+      ---
+      duration_ms: 8.939261
+      type: 'test'
+      location: '/app/tests/seguridad.test.ts:2:4169'
+      failureType: 'testCodeFailure'
+      error: |-
+        El filtro por origen devolvió 20 productos (14 de otros orígenes): el payload sigue inyectando SQL.
+        
+        14 !== 0
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 0
+      actual: 14
+      operator: 'strictEqual'
+      stack: |-
+        TestContext.<anonymous> (/app/tests/seguridad.test.ts:189:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: el filtro por mesa NO se puede ampliar con SQL
+    not ok 3 - el filtro por mesa NO se puede ampliar con SQL
+      ---
+      duration_ms: 7.928278
+      type: 'test'
+      location: '/app/tests/seguridad.test.ts:2:4685'
+      failureType: 'testCodeFailure'
+      error: |-
+        El filtro por mesa devolvió 10 pedidos de otras mesas: el payload sigue inyectando SQL.
+        
+        10 !== 0
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 0
+      actual: 10
+      operator: 'strictEqual'
+      stack: |-
+        TestContext.<anonymous> (/app/tests/seguridad.test.ts:203:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: el reporte por origen NO filtra otras tablas con UNION
+    not ok 4 - el reporte por origen NO filtra otras tablas con UNION
+      ---
+      duration_ms: 13.912732
+      type: 'test'
+      location: '/app/tests/seguridad.test.ts:2:5145'
+      failureType: 'testCodeFailure'
+      error: |-
+        El reporte devolvió datos de la tabla usuarios mediante UNION (valentina, barista, mozo, cliente, func_admin, func_barista, func_mal, func_logout): la inyección SQL del reporte sigue abierta.
+        
+        8 !== 0
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 0
+      actual: 8
+      operator: 'strictEqual'
+      stack: |-
+        TestContext.<anonymous> (/app/tests/seguridad.test.ts:223:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: la aplicación NO se conecta con un superusuario de la base
+    not ok 5 - la aplicación NO se conecta con un superusuario de la base
+      ---
+      duration_ms: 4.571763
+      type: 'test'
+      location: '/app/tests/seguridad.test.ts:2:5828'
+      failureType: 'testCodeFailure'
+      error: |-
+        La aplicación se conecta como "postgres", que es superusuario: usá el usuario origen_app con permisos reducidos (mínimos privilegios).
+        
+        true !== false
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: false
+      actual: true
+      operator: 'strictEqual'
+      stack: |-
+        TestContext.<anonymous> (/app/tests/seguridad.test.ts:237:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    1..5
+not ok 3 - Seguridad · Inyección SQL
+  ---
+  duration_ms: 123.192349
+  type: 'suite'
+  location: '/app/tests/seguridad.test.ts:2:3445'
+  failureType: 'subtestsFailed'
+  error: '5 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# [error] invalid input syntax for type integer: "<script>alert(1)</script>"
+# Subtest: Seguridad · Cross-Site Scripting
+    # Subtest: el servidor NO devuelve HTML sin escapar en los errores
+    not ok 1 - el servidor NO devuelve HTML sin escapar en los errores
+      ---
+      duration_ms: 9.376714
+      type: 'test'
+      location: '/app/tests/seguridad.test.ts:3:493'
+      failureType: 'testCodeFailure'
+      error: 'La respuesta del servidor devuelve el HTML recibido tal cual: {"error":"invalid input syntax for type integer: \\"<script>alert(1)</script>\\"","stack":"error: invalid input syntax for type integer: \\"<script>alert(1)</script>\\"\\n    at /app/node_modules/pg-pool/index.js:45:11\\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\\n    at async Object.obtener (/app/src/services/catalogo.service.ts:55:20)\\n    at async <anonymous> (/app/src/routes/productos.routes.ts:54:22)"}'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: true
+      actual: false
+      operator: '=='
+      stack: |-
+        TestContext.<anonymous> (/app/tests/seguridad.test.ts:257:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Promise.all (index 0)
+        async Suite.run (node:internal/test_runner/test:1442:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: el login NO devuelve HTML sin escapar en el mensaje de error
+    not ok 2 - el login NO devuelve HTML sin escapar en el mensaje de error
+      ---
+      duration_ms: 44.775846
+      type: 'test'
+      location: '/app/tests/seguridad.test.ts:3:874'
+      failureType: 'testCodeFailure'
+      error: 'El mensaje de error del login devuelve HTML sin escapar: {"error":"El usuario \\"<img src=x onerror=alert(1)>\\" no existe en el sistema."}'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: true
+      actual: false
+      operator: '=='
+      stack: |-
+        TestContext.<anonymous> (/app/tests/seguridad.test.ts:267:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: el cliente NO inserta datos con innerHTML
+    not ok 3 - el cliente NO inserta datos con innerHTML
+      ---
+      duration_ms: 3.577379
+      type: 'test'
+      location: '/app/tests/seguridad.test.ts:3:1218'
+      failureType: 'testCodeFailure'
+      error: |-
+        Estos archivos siguen inyectando con innerHTML: src/public/js/admin.js, src/public/js/app.js. Usá textContent o document.createElement.
+        + actual - expected
+        
+        + [
+        +   'src/public/js/admin.js',
+        +   'src/public/js/app.js'
+        + ]
+        - []
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+      actual:
+        0: 'src/public/js/admin.js'
+        1: 'src/public/js/app.js'
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (/app/tests/seguridad.test.ts:287:12)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    1..3
+not ok 4 - Seguridad · Cross-Site Scripting
+  ---
+  duration_ms: 81.293167
+  type: 'suite'
+  location: '/app/tests/seguridad.test.ts:3:345'
+  failureType: 'subtestsFailed'
+  error: '3 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: Seguridad · CSRF
+    # Subtest: existe un token anti-CSRF y las peticiones sin token se rechazan
+    not ok 1 - existe un token anti-CSRF y las peticiones sin token se rechazan
+      ---
+      duration_ms: 56.055739
+      type: 'test'
+      location: '/app/tests/seguridad.test.ts:3:2113'
+      failureType: 'testCodeFailure'
+      error: 'No se encontró ningún token anti-CSRF. La app debe generar un token aleatorio por sesión, exponerlo (por ejemplo GET /api/csrf-token) y validarlo en el servidor.'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: true
+      actual: ~
+      operator: '=='
+      stack: |-
+        TestContext.<anonymous> (/app/tests/seguridad.test.ts:312:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Promise.all (index 0)
+        async Suite.run (node:internal/test_runner/test:1442:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    1..1
+not ok 5 - Seguridad · CSRF
+  ---
+  duration_ms: 87.425884
+  type: 'suite'
+  location: '/app/tests/seguridad.test.ts:3:1895'
+  failureType: 'subtestsFailed'
+  error: '1 subtest failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: Seguridad · Validación de entrada
+    # Subtest: no se aceptan cantidades negativas
+    not ok 1 - no se aceptan cantidades negativas
+      ---
+      duration_ms: 26.604374
+      type: 'test'
+      location: '/app/tests/seguridad.test.ts:3:3691'
+      failureType: 'testCodeFailure'
+      error: 'Se creó un pedido con total NEGATIVO (-28700.00): la cantidad no se valida en el servidor.'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: true
+      actual: false
+      operator: '=='
+      stack: |-
+        TestContext.<anonymous> (/app/tests/seguridad.test.ts:366:14)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Promise.all (index 0)
+        async Suite.run (node:internal/test_runner/test:1442:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+# [error] invalid input syntax for type integer: "muchos"
+    # Subtest: no se aceptan cantidades no numéricas
+    not ok 2 - no se aceptan cantidades no numéricas
+      ---
+      duration_ms: 17.022765
+      type: 'test'
+      location: '/app/tests/seguridad.test.ts:3:4555'
+      failureType: 'testCodeFailure'
+      error: 'La API respondió 500 (500 = el servidor no validó el tipo de la cantidad).'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: true
+      actual: false
+      operator: '=='
+      stack: |-
+        TestContext.<anonymous> (/app/tests/seguridad.test.ts:398:14)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: no se aceptan reseñas sin límite de longitud
+    not ok 3 - no se aceptan reseñas sin límite de longitud
+      ---
+      duration_ms: 15.359115
+      type: 'test'
+      location: '/app/tests/seguridad.test.ts:3:5200'
+      failureType: 'testCodeFailure'
+      error: 'Se guardó una reseña de 5000 caracteres: falta el límite de longitud en el servidor.'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: true
+      actual: false
+      operator: '=='
+      stack: |-
+        TestContext.<anonymous> (/app/tests/seguridad.test.ts:413:14)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: no se aceptan archivos ejecutables ni se escribe fuera de uploads
+    not ok 4 - no se aceptan archivos ejecutables ni se escribe fuera de uploads
+      ---
+      duration_ms: 53.403737
+      type: 'test'
+      location: '/app/tests/seguridad.test.ts:3:5773'
+      failureType: 'testCodeFailure'
+      error: 'Se aceptó un archivo .html y se sirvió como /uploads/prueba.html: se puede ejecutar HTML desde el propio origen.'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: true
+      actual: false
+      operator: '=='
+      stack: |-
+        TestContext.<anonymous> (/app/tests/seguridad.test.ts:439:14)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    1..4
+not ok 6 - Seguridad · Validación de entrada
+  ---
+  duration_ms: 151.330384
+  type: 'suite'
+  location: '/app/tests/seguridad.test.ts:3:3453'
+  failureType: 'subtestsFailed'
+  error: '4 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: Seguridad · Autenticación y sesiones
+    # Subtest: las contraseñas NO se guardan en texto plano
+    not ok 1 - las contraseñas NO se guardan en texto plano
+      ---
+      duration_ms: 1.578094
+      type: 'test'
+      location: '/app/tests/seguridad.test.ts:3:7657'
+      failureType: 'testCodeFailure'
+      error: |-
+        Contraseñas sin hashear: admin, valentina, barista, mozo, cliente, func_admin, func_barista, func_mal, func_logout. Usá bcryptjs (bcrypt.hash / bcrypt.compare). Si la base ya tenía las contraseñas en claro, regenerala con `docker compose down -v && docker compose up -d` o hacé que la carga inicial actualice los hashes.
+        
+        9 !== 0
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 0
+      actual: 9
+      operator: 'strictEqual'
+      stack: |-
+        TestContext.<anonymous> (/app/tests/seguridad.test.ts:495:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Promise.all (index 0)
+        async Suite.run (node:internal/test_runner/test:1442:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: la cookie de sesión lleva HttpOnly, Secure y SameSite
+    not ok 2 - la cookie de sesión lleva HttpOnly, Secure y SameSite
+      ---
+      duration_ms: 30.066743
+      type: 'test'
+      location: '/app/tests/seguridad.test.ts:3:8251'
+      failureType: 'testCodeFailure'
+      error: 'La cookie de sesión no tiene HttpOnly: sid=sesion_6; Path=/'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: true
+      actual: false
+      operator: '=='
+      stack: |-
+        TestContext.<anonymous> (/app/tests/seguridad.test.ts:512:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: el identificador de sesión es aleatorio y no predecible
+    not ok 3 - el identificador de sesión es aleatorio y no predecible
+      ---
+      duration_ms: 31.898172
+      type: 'test'
+      location: '/app/tests/seguridad.test.ts:3:9246'
+      failureType: 'testCodeFailure'
+      error: 'El identificador de sesión "sesion_8" es un contador.'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: true
+      actual: false
+      operator: '=='
+      stack: |-
+        <anonymous> (/app/tests/seguridad.test.ts:552:14)
+        Array.forEach (<anonymous>)
+        TestContext.<anonymous> (/app/tests/seguridad.test.ts:549:9)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: el logout invalida la sesión en el servidor
+    not ok 4 - el logout invalida la sesión en el servidor
+      ---
+      duration_ms: 47.605354
+      type: 'test'
+      location: '/app/tests/seguridad.test.ts:3:10240'
+      failureType: 'testCodeFailure'
+      error: |-
+        La sesión sigue viva en el servidor después del logout: hay que borrarla del almacén de sesiones, no sólo la cookie.
+        
+        200 !== 401
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 401
+      actual: 200
+      operator: 'strictEqual'
+      stack: |-
+        TestContext.<anonymous> (/app/tests/seguridad.test.ts:575:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: un usuario sin rol admin NO puede entrar al panel
+    not ok 5 - un usuario sin rol admin NO puede entrar al panel
+      ---
+      duration_ms: 31.554301
+      type: 'test'
+      location: '/app/tests/seguridad.test.ts:3:11437'
+      failureType: 'testCodeFailure'
+      error: 'Un usuario con rol "cliente" accedió a /api/admin/usuarios (status 200): falta el control de roles.'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: true
+      actual: false
+      operator: '=='
+      stack: |-
+        TestContext.<anonymous> (/app/tests/seguridad.test.ts:594:14)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: un usuario NO puede cambiar su propio rol a admin
+    not ok 6 - un usuario NO puede cambiar su propio rol a admin
+      ---
+      duration_ms: 30.845932
+      type: 'test'
+      location: '/app/tests/seguridad.test.ts:3:12114'
+      failureType: 'testCodeFailure'
+      error: |-
+        El usuario se auto-asignó el rol "admin": escalada de privilegios sin verificar el rol de quien lo pide.
+        
+        'admin' !== 'cliente'
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 'cliente'
+      actual: 'admin'
+      operator: 'strictEqual'
+      stack: |-
+        TestContext.<anonymous> (/app/tests/seguridad.test.ts:612:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    1..6
+not ok 7 - Seguridad · Autenticación y sesiones
+  ---
+  duration_ms: 202.844176
+  type: 'suite'
+  location: '/app/tests/seguridad.test.ts:3:7416'
+  failureType: 'subtestsFailed'
+  error: '6 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: Seguridad · Inyección de comandos
+    # Subtest: el endpoint de conexión NO ejecuta el comando inyectado
+    not ok 1 - el endpoint de conexión NO ejecuta el comando inyectado
+      ---
+      duration_ms: 2052.951886
+      type: 'test'
+      location: '/app/tests/seguridad.test.ts:3:13147'
+      failureType: 'testCodeFailure'
+      error: 'El comando inyectado se ejecutó y devolvió "INYECCION_DETECTADA". Usá spawn() con argumentos separados y shell:false, y validá el host contra una lista blanca.'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: true
+      actual: false
+      operator: '=='
+      stack: |-
+        TestContext.<anonymous> (/app/tests/seguridad.test.ts:643:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Promise.all (index 0)
+        async Suite.run (node:internal/test_runner/test:1442:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: el endpoint de conexión NO ejecuta un segundo comando encadenado
+    not ok 2 - el endpoint de conexión NO ejecuta un segundo comando encadenado
+      ---
+      duration_ms: 2082.933412
+      type: 'test'
+      location: '/app/tests/seguridad.test.ts:4:270'
+      failureType: 'testCodeFailure'
+      error: |-
+        El comando "id" se ejecutó dentro del servidor: PING 127.0.0.1 (127.0.0.1): 56 data bytes
+        64 bytes from 127.0.0.1: seq=0 ttl=64 time=0.059 ms
+        64 bytes from 127.0.0.1: seq=1 ttl=64 time=0.088 ms
+        64 bytes from 127.0.0.1: seq=2 ttl=64 time=0.166 ms
+        
+        --- 127.0.0.1 ping statistics ---
+        3 packets transmitted, 3 packets received, 0% packet loss
+        round-trip min/avg/max = 0.059/0.104/0.166 ms
+        uid=0(root) gid=0(root) groups=0(root),0(root),1(bin),2(daemon),3(sys),4(adm),6(disk),10(wheel),11(floppy),20(dialout),26(tape),27(video)
+        
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: true
+      actual: false
+      operator: '=='
+      stack: |-
+        TestContext.<anonymous> (/app/tests/seguridad.test.ts:661:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    1..2
+not ok 8 - Seguridad · Inyección de comandos
+  ---
+  duration_ms: 4174.788164
+  type: 'suite'
+  location: '/app/tests/seguridad.test.ts:3:12909'
+  failureType: 'subtestsFailed'
+  error: '2 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: Seguridad · Configuración y exposición de información
+    # Subtest: el endpoint de diagnóstico NO expone secretos
+    not ok 1 - el endpoint de diagnóstico NO expone secretos
+      ---
+      duration_ms: 8.809724
+      type: 'test'
+      location: '/app/tests/seguridad.test.ts:5:349'
+      failureType: 'testCodeFailure'
+      error: 'El diagnóstico expone contraseñas: {"mensaje":"Diagnóstico del servidor","version":"1.0.0","entorno":{"npm_config_user_agent":"npm/10.9.9 node/v22.23.5 linux x64 workspaces/false","NODE_VERSION":"22.23.5","HOSTNAME":"3403904f4050","DB_'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: true
+      actual: false
+      operator: '=='
+      stack: |-
+        TestContext.<anonymous> (/app/tests/seguridad.test.ts:680:14)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Promise.all (index 0)
+        async Suite.run (node:internal/test_runner/test:1442:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+# [error] Cannot read properties of undefined (reading 'gramos')
+    # Subtest: la API NO devuelve stack traces al cliente
+    not ok 2 - la API NO devuelve stack traces al cliente
+      ---
+      duration_ms: 10.898434
+      type: 'test'
+      location: '/app/tests/seguridad.test.ts:5:1121'
+      failureType: 'testCodeFailure'
+      error: 'La respuesta incluye el stack trace del error.'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: true
+      actual: false
+      operator: '=='
+      stack: |-
+        TestContext.<anonymous> (/app/tests/seguridad.test.ts:708:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: el sitio envía cabeceras de seguridad
+    not ok 3 - el sitio envía cabeceras de seguridad
+      ---
+      duration_ms: 7.761712
+      type: 'test'
+      location: '/app/tests/seguridad.test.ts:5:1588'
+      failureType: 'testCodeFailure'
+      error: 'Falta la cabecera Content-Security-Policy (probá helmet con contentSecurityPolicy).'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: true
+      operator: '=='
+      stack: |-
+        TestContext.<anonymous> (/app/tests/seguridad.test.ts:719:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    1..3
+not ok 9 - Seguridad · Configuración y exposición de información
+  ---
+  duration_ms: 58.142566
+  type: 'suite'
+  location: '/app/tests/seguridad.test.ts:5:171'
+  failureType: 'subtestsFailed'
+  error: '3 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+1..9
+# tests 29
+# suites 9
+# pass 1
+# fail 28
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 6728.116422
