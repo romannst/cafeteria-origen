@@ -72,7 +72,17 @@
   }
 
   function api(url, opciones) {
-    return fetch(API + url, opciones).then(function (res) {
+    var config = Object.assign({}, opciones || {});
+    var metodo = (config.method || 'GET').toUpperCase();
+    var preparar = ['GET', 'HEAD', 'OPTIONS'].indexOf(metodo) === -1 && url !== '/auth/login'
+      ? fetch(API + '/csrf-token').then(function (res) {
+        if (!res.ok) throw new Error('No se pudo obtener el token CSRF.');
+        return res.json();
+      }).then(function (data) {
+        config.headers = Object.assign({}, config.headers || {}, { 'X-CSRF-Token': data.token });
+      })
+      : Promise.resolve();
+    return preparar.then(function () { return fetch(API + url, config); }).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (data) {
         return { ok: res.ok, status: res.status, data: data };
       });

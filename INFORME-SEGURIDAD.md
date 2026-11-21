@@ -302,11 +302,21 @@ error agrega capas para cuando algo se escapa.
   [Encabezados](evidencia/csrf-validacion/antes-csrf-contrasena-encabezados.png)
   (sin contraseña ni cookie visible). Por separado, el test existente no
   encontró token.
-- **Corrección y decisiones:** pendientes. Coordinar la asociación y rotación
-  del token con el trabajo de sesiones; `SameSite` también depende de
-  ese trabajo. No deshacer los cambios XSS en los helpers HTTP.
-- **Cómo se verifica:** pendiente; comprobar rechazo sin token y aceptación
-  de operaciones legítimas con token válido, también en visitantes.
+- **Corrección y decisiones (en curso):** `src/middleware/csrf.ts` emite
+  `GET /api/csrf-token` con token aleatorio vinculado a la sesión autenticada
+  o a una cookie anónima `HttpOnly; SameSite=Lax`. `src/app.ts` comprueba el
+  token en escrituras y compara `Origin`/`Referer` cuando se envían;
+  `app.js` y `admin.js` lo solicitan y mandan en `X-CSRF-Token`. El login
+  conserva temporalmente compatibilidad sin token con las pruebas de auth,
+  aunque se rechaza si informa un origen ajeno: **no se presenta como
+  protección CSRF completa del login**. Coordinar el token obligatorio en
+  login, la rotación/expiración y la política `SameSite` de la cookie `sid`
+  con el trabajo de sesiones. No se deshicieron los cambios XSS.
+- **Cómo se verificó hasta ahora:** el caso CSRF existente pasó con pedido
+  válido y token; `tests/csrf-regresion.test.ts` comprueba rechazo sin token,
+  con token de otro visitante y con origen ajeno. Typecheck y sintaxis JS
+  aprobados. Quedan pendientes las pruebas funcionales y la integración
+  completa tras las demás correcciones.
 
 ### VUL-10 · Pedidos sin validación suficiente
 
@@ -337,6 +347,10 @@ error agrega capas para cuando algo se escapa.
   carrito a `"abc"` y se envió el pedido desde la interfaz. La solicitud
   `POST /api/pedidos` contenía mesa `"6"`, cliente ficticio
   `Prueba Roman P3` e `items` con producto `"16"` y cantidad `"abc"`.
+  La guía propone cambiar `type="number"` por `type="text"` en DevTools;
+  en esta interfaz se alteró `origen.carrito` en Local Storage en su lugar,
+  sin cambiar el atributo HTML. La carga útil confirma que `"abc"` llegó
+  al servidor.
   El servidor respondió **500 Internal Server Error**, con el error
   `invalid input syntax for type integer: "abc"` y un stack trace en el
   cuerpo. No se comprobó de forma independiente si hubo una escritura parcial
