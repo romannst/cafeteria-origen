@@ -30,11 +30,14 @@
     if (texto != null) nodo.textContent = String(texto);
     return nodo;
   }
-  function raw(valor) {
-    // FALLA: esta función NO escapa nada, devuelve el valor tal cual.
-    // La forma correcta de renderizar texto del servidor es escaparHtml()
-    // (o textContent en vez de innerHTML).
-    return String(valor == null ? '' : valor);
+
+  // Botón del carrito con su acción (mas / menos / quitar) y el índice del item.
+  function botonCarrito(accion, indice, texto, clase) {
+    var b = crearEl('button', clase, texto);
+    b.type = 'button';
+    b.dataset.acc = accion;
+    b.dataset.i = indice;
+    return b;
   }
 
   function api(url, opciones) {
@@ -67,11 +70,7 @@
     }
   }
 
-  function escaparHtml(texto) {
-    var div = document.createElement('div');
-    div.textContent = texto == null ? '' : String(texto);
-    return div.innerHTML;
-  }
+
 
   /* ------------------------------------------------------------- catálogo */
   function urlCatalogo() {
@@ -98,36 +97,35 @@
     var grid = $('#productos-grid');
 
     if (!productos || productos.length === 0) {
-      grid.innerHTML = '<p class="empty">No encontramos productos con esos filtros.</p>';
+      grid.replaceChildren(crearEl('p', 'empty', 'No encontramos productos con esos filtros.'));
       return;
     }
 
-    // ---------------------------------------------------------------
-    // FALLA (XSS reflejado / almacenado): el HTML se construye con
-    // innerHTML a partir de datos que vienen del servidor (nombres de
-    // producto y texto de la búsqueda). Un "<script>" en el buscador o
-    // en el nombre de un producto se ejecuta en el navegador.
-    //
-    // Corrección: usar textContent, o escapar los valores antes de
-    // interpolarlos (ver la función escaparHtml de arriba).
-    // ---------------------------------------------------------------
-    grid.innerHTML = productos.map(function (p) {
+    // Cada tarjeta se arma con nodos: nombre, descripción y etiquetas
+    // vienen de la base y se insertan como texto.
+    var tarjetas = productos.map(function (p) {
       window.__productos[p.id] = p;
-      var tags = '<span class="tag">' + raw(p.tipo) + '</span>';
-      if (p.variedad) tags += '<span class="tag tag-origen">' + raw(p.variedad) + '</span>';
-      if (p.tamano) tags += '<span class="tag">' + raw(p.tamano) + '</span>';
 
-      return '' +
-        '<article class="product-card">' +
-        '  <div class="product-top">' +
-        '    <h3 class="product-name">' + raw(p.nombre) + '</h3>' +
-        '    <span class="product-price">' + money(p.precio) + '</span>' +
-        '  </div>' +
-        '  <div class="product-tags">' + tags + '</div>' +
-        '  <p class="product-desc">' + raw(p.descripcion) + '</p>' +
-        '  <button class="btn btn-ghost btn-agregar" data-id="' + raw(p.id) + '">Agregar</button>' +
-        '</article>';
-    }).join('');
+      var top = crearEl('div', 'product-top');
+      top.append(
+        crearEl('h3', 'product-name', p.nombre),
+        crearEl('span', 'product-price', money(p.precio))
+      );
+
+      var tags = crearEl('div', 'product-tags');
+      tags.append(crearEl('span', 'tag', p.tipo));
+      if (p.variedad) tags.append(crearEl('span', 'tag tag-origen', p.variedad));
+      if (p.tamano) tags.append(crearEl('span', 'tag', p.tamano));
+
+      var boton = crearEl('button', 'btn btn-ghost btn-agregar', 'Agregar');
+      boton.dataset.id = p.id;
+
+      var card = crearEl('article', 'product-card');
+      card.append(top, tags, crearEl('p', 'product-desc', p.descripcion), boton);
+      return card;
+    });
+
+    grid.replaceChildren(...tarjetas);
   }
 
   function renderResultado(filtros, total) {
@@ -147,7 +145,9 @@
   }
 
   function renderErrorProductos(mensaje) {
-    $('#productos-grid').innerHTML = '<p class="empty">No se pudo cargar el menú: ' + (mensaje || 'error desconocido') + '</p>';
+    $('#productos-grid').replaceChildren(
+      crearEl('p', 'empty', 'No se pudo cargar el menú: ' + (mensaje || 'error desconocido'))
+    );
   }
 
   /* --------------------------------------------------------------- carrito */
@@ -185,43 +185,57 @@
     renderCarrito();
   }
 
+
   function renderCarrito() {
     var cont = $('#carrito');
     var lista = $('#resumen-carrito');
     var total = 0;
 
     if (estado.carrito.length === 0) {
-      cont.innerHTML = '<p class="empty">El carrito está vacío.</p>';
-      lista.innerHTML = '';
+      cont.replaceChildren(crearEl('p', 'empty', 'El carrito está vacío.'));
+      lista.replaceChildren();
       $('#resumen-total').textContent = money(0);
       return;
     }
 
-    cont.innerHTML = estado.carrito.map(function (item, i) {
+    var filas = estado.carrito.map(function (item, i) {
       var subtotal = item.precio * item.cantidad;
       total += subtotal;
-      return '' +
-        '<div class="cart-item">' +
-        '  <div>' +
-        '    <div class="cart-item-name">' + raw(item.nombre) + '</div>' +
-        '    <div class="cart-item-meta">' + money(item.precio) + ' c/u</div>' +
-        '  </div>' +
-        '  <div class="qty-control">' +
-        '    <button type="button" data-acc="menos" data-i="' + i + '">&minus;</button>' +
-        '    <span>' + item.cantidad + '</span>' +
-        '    <button type="button" data-acc="mas" data-i="' + i + '">+</button>' +
-        '  </div>' +
-        '  <div>' +
-        '    <div class="cart-item-price">' + money(subtotal) + '</div>' +
-        '    <button type="button" class="link-danger" data-acc="quitar" data-i="' + i + '">Quitar</button>' +
-        '  </div>' +
-        '</div>';
-    }).join('');
 
-    lista.innerHTML = estado.carrito.map(function (item) {
-      return '<li><span>' + raw(item.nombre) + ' × ' + item.cantidad + '</span><span>' +
-        money(item.precio * item.cantidad) + '</span></li>';
-    }).join('');
+      var info = crearEl('div');
+      info.append(
+        crearEl('div', 'cart-item-name', item.nombre),
+        crearEl('div', 'cart-item-meta', money(item.precio) + ' c/u')
+      );
+
+      var qty = crearEl('div', 'qty-control');
+      qty.append(
+        botonCarrito('menos', i, '−'),
+        crearEl('span', null, item.cantidad),
+        botonCarrito('mas', i, '+')
+      );
+
+      var precio = crearEl('div');
+      precio.append(
+        crearEl('div', 'cart-item-price', money(subtotal)),
+        botonCarrito('quitar', i, 'Quitar', 'link-danger')
+      );
+
+      var fila = crearEl('div', 'cart-item');
+      fila.append(info, qty, precio);
+      return fila;
+    });
+    cont.replaceChildren(...filas);
+
+    var items = estado.carrito.map(function (item) {
+      var li = crearEl('li');
+      li.append(
+        crearEl('span', null, item.nombre + ' × ' + item.cantidad),
+        crearEl('span', null, money(item.precio * item.cantidad))
+      );
+      return li;
+    });
+    lista.replaceChildren(...items);
 
     $('#resumen-total').textContent = money(total);
   }
@@ -241,9 +255,9 @@
       }),
     }).then(function (resp) {
       if (!resp.ok) {
-        // FALLA (XSS reflejado): el mensaje del servidor se pinta con innerHTML.
+
         feedback.className = 'form-feedback is-error';
-        feedback.innerHTML = 'No pudimos enviar el pedido: ' + (resp.data.error || 'error desconocido');
+        feedback.textContent = 'No pudimos enviar el pedido: ' + (resp.data.error || 'error desconocido');
         return;
       }
       feedback.className = 'form-feedback is-ok';
@@ -260,7 +274,7 @@
   }
 
   /* --------------------------------------------------------------- reseñas */
-    function cargarReseñas() {
+  function cargarReseñas() {
     return api('/comentarios').then(function (resp) {
       var cont = $('#lista-resenas');
       if (!resp.ok || !resp.data.comentarios || resp.data.comentarios.length === 0) {
