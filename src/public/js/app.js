@@ -22,6 +22,14 @@
     return n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' });
   }
 
+  // Crea un elemento HTML con su clase y su texto. Usa textContent,
+  // así que el texto nunca se interpreta como HTML (no hay XSS).
+  function crearEl(tag, clase, texto) {
+    var nodo = document.createElement(tag);
+    if (clase) nodo.className = clase;
+    if (texto != null) nodo.textContent = String(texto);
+    return nodo;
+  }
   function raw(valor) {
     // FALLA: esta función NO escapa nada, devuelve el valor tal cual.
     // La forma correcta de renderizar texto del servidor es escaparHtml()
@@ -125,9 +133,14 @@
   function renderResultado(filtros, total) {
     var el = $('#resultado-busqueda');
 
-    // FALLA (XSS reflejado): se interpola el texto buscado con innerHTML.
     if (filtros && filtros.q) {
-      el.innerHTML = 'Resultados para <strong>' + filtros.q + '</strong> — ' + total + ' producto(s)';
+      // El texto buscado va dentro de un <strong> creado con textContent:
+      // se muestra como texto aunque contenga etiquetas HTML.
+      el.replaceChildren(
+        'Resultados para ',
+        crearEl('strong', null, filtros.q),
+        ' — ' + total + ' producto(s)'
+      );
     } else {
       el.textContent = total + ' producto(s) en el menú';
     }
