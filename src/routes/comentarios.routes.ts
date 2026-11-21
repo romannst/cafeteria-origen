@@ -1,5 +1,6 @@
 import express from 'express';
 import * as comentarios from '../services/comentarios.service';
+import { comentarioValido } from '../validacion';
 
 const router = express.Router();
 
@@ -18,12 +19,16 @@ router.get('/', async (req, res, next) => {
 /**
  * POST /api/comentarios
  *
- * FALLAS: sin token anti-CSRF, sin validación de longitud/rango y sin
- * sanitización (XSS almacenado).
+ * Token anti-CSRF global y validación de longitud/rango en el servidor.
+ * La salida se muestra como texto en el frontend (corrección XSS).
  */
 router.post('/', async (req, res, next) => {
   try {
-    const { autor, texto, calificacion } = req.body || {};
+    const texto = req.body?.texto;
+    if (typeof texto !== 'string' || texto.length > 280 || !comentarioValido(req.body)) {
+      return res.status(400).json({ error: 'Datos de reseña inválidos.' });
+    }
+    const { autor, calificacion } = req.body || {};
     const comentario = await comentarios.crear({
       autor,
       texto,

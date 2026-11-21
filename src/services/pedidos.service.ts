@@ -22,17 +22,17 @@ type Id = number | string;
  * Servicio de pedidos.
  *
  * -----------------------------------------------------------------------------
- * FALLA — Validación de entrada débil o insuficiente (OWASP A04:2021)
+ * Línea de base: validación insuficiente (OWASP A04:2021)
  * -----------------------------------------------------------------------------
- * No se valida nada de lo que llega en el cuerpo de la petición:
+ * Anteriormente no se validaba lo que llegaba en el cuerpo de la petición:
  *  - `cantidad` puede ser negativa (el total del pedido queda negativo),
  *    cero, un número decimal o un texto.
  *  - No hay un máximo de items ni de cantidad (DoS / facturas absurdas).
  *  - `mesa` y `cliente` no se validan ni se acotan en longitud.
  *  - Si el productoId no existe, la excepción sube y se filtra el stack.
  *
- * La corrección es validar TIPO (entero), RANGO (1..N), LONGITUD y FORMATO
- * de cada campo en el servidor, usando listas blancas.
+ * Las peticiones HTTP ahora se validan en pedidos.routes.ts antes de llamar a
+ * este servicio. Coordinar cualquier cambio de consultas con el bloque SQLi.
  * -----------------------------------------------------------------------------
  */
 
@@ -41,15 +41,18 @@ type Id = number | string;
  * Total = suma de calcularPrecio(producto) x cantidad
  */
 export async function crear({ mesa, cliente, items }: NuevoPedido): Promise<PedidoConItems | null> {
-  // FALLA: no se valida que items exista, sea un array, ni que cada cantidad
-  // sea un entero positivo. Los tipos de `NuevoPedido` NO alcanzan: el cuerpo
-  // de la petición llega como `any` y en ejecución puede traer cualquier cosa.
+  // La ruta valida el cuerpo antes de llamar al servicio; los tipos de
+  // TypeScript por sí solos no validan entradas HTTP.
   const filas: { productoId: number; cantidad: number; precioUnitario: number }[] = [];
 
   for (const item of items) {
-    // Si el producto no existe, buscarProducto devuelve null y `precio`
-    // revienta con un TypeError cuyo stack se filtra al cliente.
+    // Un producto inexistente se rechaza antes de insertar el pedido.
     const producto = await buscarProducto(item.productoId);
+    if (!producto) {
+      const error = new Error('Producto no encontrado.') as Error & { status: number };
+      error.status = 400;
+      throw error;
+    }
     const precioUnitario = calcularPrecio(producto);
     filas.push({
       productoId: producto.id,
