@@ -10,6 +10,7 @@ import * as usuarios from '../services/usuarios.service';
 import { requiereSesion, requiereRol } from '../middleware/auth';
 import type { Usuario } from '../tipos';
 import { imagenPng, MAX_BYTES } from '../validacion-archivo';
+import { idValido } from '../validacion';
 
 const router = express.Router();
 
@@ -31,6 +32,11 @@ const router = express.Router();
  * -----------------------------------------------------------------------------
  */
 router.use(requiereSesion);
+
+router.param('id', (req, res, next, id) => {
+  if (!idValido(id)) return res.status(400).json({ error: 'ID inválido.' });
+  next();
+});
 
 /** GET /api/admin/usuarios */
 router.get('/usuarios', async (req, res, next) => {
@@ -97,8 +103,7 @@ router.put('/productos/:id', async (req, res, next) => {
 /**
  * DELETE /api/admin/productos/:id
  *
- * FALLA — CSRF: la petición que borra un producto no lleva ningún token y se
- * acepta con un simple GET/POST desde cualquier origen.
+ * Token CSRF y origen verificados por el middleware montado en src/app.ts.
  */
 router.delete('/productos/:id', async (req, res, next) => {
   try {
@@ -115,7 +120,8 @@ router.delete('/productos/:id', async (req, res, next) => {
 /**
  * POST /api/admin/cambiar-contrasena
  *
- * FALLAS: sin token anti-CSRF, sin límite de intentos, y la contraseña nueva
+ * Token CSRF verificado en src/app.ts.
+ * FALLAS pendientes de autenticación: sin límite de intentos, y la contraseña nueva
  * se guarda en texto plano.
  */
 router.post('/cambiar-contrasena', async (req, res, next) => {

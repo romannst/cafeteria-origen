@@ -1,3 +1,11 @@
+/** IDs de columnas SERIAL/INTEGER de PostgreSQL. */
+export function idValido(valor: unknown): boolean {
+  const numero = typeof valor === 'string' && /^[1-9]\d{0,9}$/.test(valor)
+    ? Number(valor) : valor;
+  return typeof numero === 'number' && Number.isInteger(numero) &&
+    numero > 0 && numero <= 2147483647;
+}
+
 export function pedidoValido(body: unknown): boolean {
   if (!body || typeof body !== 'object') return false;
   const { mesa, cliente, items } = body as Record<string, unknown>;
@@ -13,7 +21,7 @@ export function pedidoValido(body: unknown): boolean {
         ? Number(productoId) : productoId;
       const n = typeof cantidad === 'string' && /^[1-9]\d*$/.test(cantidad)
         ? Number(cantidad) : cantidad;
-      return Number.isSafeInteger(id) && (id as number) > 0 &&
+      return idValido(id) &&
         Number.isSafeInteger(n) && (n as number) >= 1 && (n as number) <= 100;
     });
 }

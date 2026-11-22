@@ -1,8 +1,13 @@
 import express from 'express';
 import * as pedidos from '../services/pedidos.service';
-import { pedidoValido, estadoValido } from '../validacion';
+import { pedidoValido, estadoValido, idValido } from '../validacion';
 
 const router = express.Router();
+
+router.param('id', (req, res, next, id) => {
+  if (!idValido(id)) return res.status(400).json({ error: 'ID de pedido inválido.' });
+  next();
+});
 
 /**
  * POST /api/pedidos

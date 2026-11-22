@@ -38,13 +38,14 @@ import {
   agente,
   prepararBase,
   login,
+  postConToken,
   productoPorNombre,
   crearUsuarioDePrueba,
   cookieCruda,
   MARCA_PRUEBA,
   limpiarDatosDePrueba,
 } from './helpers';
-import type { Pedido, PedidoItem, ProductoConPrecio } from '../src/tipos';
+import type { Pedido, ProductoConPrecio } from '../src/tipos';
 
 /** Cuerpo JSON de una petición. */
 type Cuerpo = Record<string, unknown>;
@@ -136,7 +137,10 @@ function valorSid(cookie: string): string | null {
  * se perdería y los tests medirían la cosa equivocada.
  */
 async function autenticar(username: string, password: string) {
-  const res = await request(app).post('/api/auth/login').send({ username, password });
+  const info = await obtenerTokenCsrf(request(app));
+  const res = await request(app).post('/api/auth/login')
+    .set('Cookie', info?.cookies || '')
+    .send({ username, password, ...(info ? { _csrf: info.token } : {}) });
   return { res, cookies: cookiesDe(res), sid: valorSid(cookieCruda(res)) };
 }
 
@@ -333,10 +337,7 @@ describe('Seguridad · CSRF', () => {
     const conToken = await conSesion(unirCookies(cookies, info.cookies))
       .post('/api/pedidos', Object.assign({}, cuerpoPedido, { _csrf: info.token }))
       .set('X-CSRF-Token', info.token);
-    assert.ok(
-      conToken.status < 500,
-      `La API devolvió ${conToken.status} al enviar el token: revisá la verificación.`
-    );
+    assert.equal(conToken.status, 201, 'Un pedido válido con token debe crearse.');
   });
 });
 
@@ -356,70 +357,34 @@ describe('Seguridad · Validación de entrada', () => {
 
   test('no se aceptan cantidades negativas', async () => {
     const producto = await productoPorNombre('Espresso Pocillo Colombia');
-    const res = await agente().post('/api/pedidos').send({
+    const res = await postConToken(agente(), '/api/pedidos', {
       mesa: '1',
       cliente: MARCA_PRUEBA,
       items: [{ productoId: producto.id, cantidad: -5 }],
     });
+    assert.equal(res.status, 400);
 
-    if (res.status === 201) {
-      assert.ok(
-        Number(res.body.total) >= 0,
-        `Se creó un pedido con total NEGATIVO (${res.body.total}): la cantidad no se valida en el servidor.`
-      );
-      const items: PedidoItem[] = res.body.items || [];
-      const cantidades = items.map((i) => Number(i.cantidad));
-      assert.ok(
-        cantidades.every((c) => c > 0),
-        `Se guardó una cantidad no positiva (${cantidades.join(', ')}).`
-      );
-    } else {
-      assert.ok(
-        res.status >= 400 && res.status < 500,
-        `La API respondió ${res.status} en vez de rechazar la entrada inválida (debería ser 4xx).`
-      );
-    }
   });
 
   test('no se aceptan cantidades no numéricas', async () => {
     const producto = await productoPorNombre('Espresso Pocillo Colombia');
-    const res = await agente().post('/api/pedidos').send({
+    const res = await postConToken(agente(), '/api/pedidos', {
       mesa: '1',
       cliente: MARCA_PRUEBA,
       items: [{ productoId: producto.id, cantidad: 'muchos' }],
     });
+    assert.equal(res.status, 400);
 
-    if (res.status === 201) {
-      assert.ok(
-        Number.isFinite(Number(res.body.total)),
-        `Se creó un pedido con total inválido (${res.body.total}).`
-      );
-    } else {
-      assert.ok(
-        res.status >= 400 && res.status < 500,
-        `La API respondió ${res.status} (500 = el servidor no validó el tipo de la cantidad).`
-      );
-    }
   });
 
   test('no se aceptan reseñas sin límite de longitud', async () => {
-    const res = await agente().post('/api/comentarios').send({
+    const res = await postConToken(agente(), '/api/comentarios', {
       autor: MARCA_PRUEBA,
       texto: 'A'.repeat(5000),
       calificacion: 5,
     });
+    assert.equal(res.status, 400);
 
-    if (res.status === 201) {
-      assert.ok(
-        (res.body.texto || '').length <= 1000,
-        `Se guardó una reseña de ${(res.body.texto || '').length} caracteres: falta el límite de longitud en el servidor.`
-      );
-    } else {
-      assert.ok(
-        res.status >= 400 && res.status < 500,
-        `La API respondió ${res.status} en vez de rechazar la reseña.`
-      );
-    }
   });
 
   test('no se aceptan archivos ejecutables ni se escribe fuera de uploads', async () => {
@@ -504,9 +469,7 @@ describe('Seguridad · Autenticación y sesiones', () => {
 
   test('la cookie de sesión lleva HttpOnly, Secure y SameSite', async () => {
     await crearUsuarioDePrueba('sec_cookie', 'Sec_Clave_2024!', 'barista');
-    const res = await request(app)
-      .post('/api/auth/login')
-      .send({ username: 'sec_cookie', password: 'Sec_Clave_2024!' });
+    const { res } = await autenticar('sec_cookie', 'Sec_Clave_2024!');
 
     const cookie = cookieCruda(res);
     assert.ok(/HttpOnly/i.test(cookie), `La cookie de sesión no tiene HttpOnly: ${cookie}`);
@@ -534,9 +497,7 @@ describe('Seguridad · Autenticación y sesiones', () => {
 
     const ids = [];
     for (let i = 0; i < 3; i++) {
-      const res = await request(app)
-        .post('/api/auth/login')
-        .send({ username: 'sec_sid', password: 'Sec_Clave_2024!' });
+      const { res } = await autenticar('sec_sid', 'Sec_Clave_2024!');
       ids.push(valorSid(cookieCruda(res)));
     }
 
