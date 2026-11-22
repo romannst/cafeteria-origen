@@ -1,0 +1,132 @@
+TAP version 13
+# Subtest: Seguridad · CSRF
+    # Subtest: existe un token anti-CSRF y las peticiones sin token se rechazan
+    not ok 1 - existe un token anti-CSRF y las peticiones sin token se rechazan
+      ---
+      duration_ms: 227.9874
+      type: 'test'
+      location: '/app/tests/seguridad.test.ts:3:2113'
+      failureType: 'testCodeFailure'
+      error: 'No se encontró ningún token anti-CSRF. La app debe generar un token aleatorio por sesión, exponerlo (por ejemplo GET /api/csrf-token) y validarlo en el servidor.'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: true
+      actual: ~
+      operator: '=='
+      stack: |-
+        TestContext.<anonymous> (/app/tests/seguridad.test.ts:312:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Promise.all (index 0)
+        async Suite.run (node:internal/test_runner/test:1442:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    1..1
+not ok 1 - Seguridad · CSRF
+  ---
+  duration_ms: 561.283299
+  type: 'suite'
+  location: '/app/tests/seguridad.test.ts:3:1895'
+  failureType: 'subtestsFailed'
+  error: '1 subtest failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: Seguridad · Validación de entrada
+    # Subtest: no se aceptan cantidades negativas
+    not ok 1 - no se aceptan cantidades negativas
+      ---
+      duration_ms: 161.521199
+      type: 'test'
+      location: '/app/tests/seguridad.test.ts:3:3691'
+      failureType: 'testCodeFailure'
+      error: 'Se creó un pedido con total NEGATIVO (-28700.00): la cantidad no se valida en el servidor.'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: true
+      actual: false
+      operator: '=='
+      stack: |-
+        TestContext.<anonymous> (/app/tests/seguridad.test.ts:366:14)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Promise.all (index 0)
+        async Suite.run (node:internal/test_runner/test:1442:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+# [error] invalid input syntax for type integer: "muchos"
+    # Subtest: no se aceptan cantidades no numéricas
+    not ok 2 - no se aceptan cantidades no numéricas
+      ---
+      duration_ms: 38.7432
+      type: 'test'
+      location: '/app/tests/seguridad.test.ts:3:4555'
+      failureType: 'testCodeFailure'
+      error: 'La API respondió 500 (500 = el servidor no validó el tipo de la cantidad).'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: true
+      actual: false
+      operator: '=='
+      stack: |-
+        TestContext.<anonymous> (/app/tests/seguridad.test.ts:398:14)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: no se aceptan reseñas sin límite de longitud
+    not ok 3 - no se aceptan reseñas sin límite de longitud
+      ---
+      duration_ms: 25.2266
+      type: 'test'
+      location: '/app/tests/seguridad.test.ts:3:5200'
+      failureType: 'testCodeFailure'
+      error: 'Se guardó una reseña de 5000 caracteres: falta el límite de longitud en el servidor.'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: true
+      actual: false
+      operator: '=='
+      stack: |-
+        TestContext.<anonymous> (/app/tests/seguridad.test.ts:413:14)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: no se aceptan archivos ejecutables ni se escribe fuera de uploads
+    not ok 4 - no se aceptan archivos ejecutables ni se escribe fuera de uploads
+      ---
+      duration_ms: 86.5873
+      type: 'test'
+      location: '/app/tests/seguridad.test.ts:3:5773'
+      failureType: 'testCodeFailure'
+      error: 'Se aceptó un archivo .html y se sirvió como /uploads/prueba.html: se puede ejecutar HTML desde el propio origen.'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: true
+      actual: false
+      operator: '=='
+      stack: |-
+        TestContext.<anonymous> (/app/tests/seguridad.test.ts:439:14)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    1..4
+not ok 2 - Seguridad · Validación de entrada
+  ---
+  duration_ms: 437.477699
+  type: 'suite'
+  location: '/app/tests/seguridad.test.ts:3:3453'
+  failureType: 'subtestsFailed'
+  error: '4 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+1..2
+# tests 5
+# suites 2
+# pass 0
+# fail 5
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3692.290792
