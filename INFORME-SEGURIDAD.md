@@ -265,8 +265,9 @@ error agrega capas para cuando algo se escapa.
 **Fallas:** VUL-09, VUL-10, VUL-11, VUL-12
 
 > Estado: línea de base registrada sobre `dev` integrado (commit `7551757`).
-> Las correcciones están en curso; las verificaciones parciales no sustituyen
-> las pruebas manuales posteriores ni la coordinación de controles compartidos.
+> Implementación propia y evidencia de los casos descritos documentadas.
+> El cierre local conserva dependencias de sesiones, configuración e integración;
+> no equivale a la aprobación global de seguridad del proyecto.
 
 ### VUL-09 · Operaciones sin protección CSRF
 
@@ -302,16 +303,20 @@ error agrega capas para cuando algo se escapa.
   [Encabezados](evidencia/csrf-validacion/antes-csrf-contrasena-encabezados.png)
   (sin contraseña ni cookie visible). Por separado, el test existente no
   encontró token.
-- **Corrección y decisiones (en curso):** `src/middleware/csrf.ts` emite
+- **Corrección y decisiones:** `src/middleware/csrf.ts` emite
   `GET /api/csrf-token` con token aleatorio vinculado a la sesión autenticada
   o a una cookie anónima `HttpOnly; SameSite=Lax`. `src/app.ts` comprueba el
   token en escrituras y compara `Origin`/`Referer` cuando se envían;
-  `app.js` y `admin.js` lo solicitan y mandan en `X-CSRF-Token`. El login
-  conserva temporalmente compatibilidad sin token con las pruebas de auth,
-  aunque se rechaza si informa un origen ajeno: **no se presenta como
-  protección CSRF completa del login**. Coordinar el token obligatorio en
-  login, la rotación/expiración y la política `SameSite` de la cookie `sid`
-  con el trabajo de sesiones. No se deshicieron los cambios XSS.
+  `app.js` y `admin.js` lo solicitan y mandan en `X-CSRF-Token`, incluido
+  el login del panel. Se eliminó la excepción inicial del login y se adaptaron
+  los clientes de pruebas para enviar token. La cookie `sid` incorpora
+  `SameSite=Lax`. Los tokens recibidos deben ser hexadecimales de 64 caracteres
+  antes de compararlos, evitando errores internos por diferencias de bytes
+  con texto Unicode. El token anónimo no sirve tras autenticarse; el token
+  autenticado tampoco sirve cuando el navegador ya no envía la sesión.
+  El almacén de tokens en memoria aún no tiene limpieza ni TTL propio:
+  coordinar su ciclo de vida con la rotación, expiración e invalidación de
+  sesiones. No se deshicieron los cambios XSS.
 - **Cómo se verificó hasta ahora:** el caso CSRF existente pasó con pedido
   válido y token; `tests/csrf-regresion.test.ts` comprueba rechazo sin token,
   con token de otro visitante y con origen ajeno. Typecheck y sintaxis JS
@@ -322,8 +327,19 @@ error agrega capas para cuando algo se escapa.
   [Encabezados](evidencia/csrf-validacion/despues-csrf-pedido-encabezados.png).
   Esto comprueba el rechazo **por origen** en ese intento, no la validación
   del token por sí sola; esta última se comprobó con las regresiones.
-  Quedan pendientes las demás comprobaciones manuales y la integración
-  con los controles de sesiones.
+  El login, `SameSite` y la separación de tokens entre visitantes y sesiones
+  se verificaron posteriormente con las pruebas de cierre; el ciclo de vida
+  de las sesiones requiere integración con su bloque. Además, se inició
+  sesión manualmente con una cuenta administrativa de prueba y se accedió
+  correctamente al panel tras exigir token en el login; esta comprobación
+  **no tiene captura** y no expone credenciales. Con la sesión abierta, se
+  repitió una sola vez el formulario local externo dirigido a
+  `POST http://localhost:8080/api/admin/cambiar-contrasena`: los encabezados
+  indicaron **403 Forbidden** y la respuesta fue
+  `{"error":"Origen de petición no permitido."}`. Este resultado se
+  comunicó en la conversación, **sin captura**; acredita rechazo por origen,
+  no una prueba aislada del token ni una comprobación independiente de la
+  contraseña almacenada.
 
 ### VUL-10 · Pedidos sin validación suficiente
 
@@ -370,11 +386,15 @@ error agrega capas para cuando algo se escapa.
 - **Otras observaciones automatizadas:** el test creó un pedido con total
   negativo (`-28700.00`) y una cantidad `"muchos"` produjo HTTP 500.
   Estos resultados se distinguen de las demostraciones manuales anteriores.
-- **Corrección y decisiones (en curso):** `src/validacion.ts` comprueba la
+- **Corrección y decisiones:** `src/validacion.ts` comprueba la
   forma de los items, IDs enteros positivos, cantidades entre 1 y 100,
   hasta 20 items, mesa numérica (1–10 caracteres), nombre (2–40) y estados
-  permitidos antes de escribir. La ruta transforma los números recibidos
-  de formularios a números reales; un producto inexistente devuelve 400.
+  permitidos antes de escribir. Los IDs se acotan a 1..2147483647, rango de
+  las columnas INTEGER de PostgreSQL. También se validan los parámetros
+  `:id` de pedidos y del panel antes de llamar al servicio; el catálogo
+  conserva su respuesta genérica 404 para IDs inválidos. La ruta transforma
+  los números recibidos de formularios a números reales; un producto
+  inexistente devuelve 400.
   Coordinar los cambios puntuales en `pedidos.service.ts` con el trabajo de
   parametrización SQL.
 - **Cómo se verificó hasta ahora:** `tests/validacion-regresion.test.ts`
@@ -401,7 +421,16 @@ error agrega capas para cuando algo se escapa.
   [Encabezados](evidencia/csrf-validacion/despues-cantidad-abc-encabezados.png).
   El total `0,00` visible en la página es un cálculo del cliente con el
   carrito alterado, no un pedido aceptado. Tampoco se verificó de manera
-  independiente el estado de la base tras este envío.
+  independiente el estado de la base tras este envío. Como comprobación
+  manual de una operación legítima, la respuesta de un pedido desde la
+  interfaz devolvió el pedido **47**, mesa `4`, cliente ficticio
+  `Prueba pedido normal`, estado `abierto` y total **13180.00**: producto
+  **6** (Espresso Taza grande Colombia) y producto **20** (Porción de
+  torta selva negra), ambos con cantidad **1**. Se registró el cuerpo de
+  la respuesta en la conversación; no se aportaron captura ni estado HTTP
+  de esa petición. Este resultado muestra que el flujo legítimo devuelve
+  un pedido, pero no verifica por sí solo el token CSRF ni una consulta
+  independiente a la base de datos.
 
 ### VUL-11 · Reseñas sin límite de longitud
 
@@ -420,7 +449,7 @@ error agrega capas para cuando algo se escapa.
   [Encabezados](evidencia/csrf-validacion/antes-resena-extensa-encabezados.png).
   Conservar la reseña. Por separado, el test existente había guardado una
   reseña de 5000 caracteres.
-- **Corrección y verificación (en curso):** `src/validacion.ts` exige autor
+- **Corrección y verificación:** `src/validacion.ts` exige autor
   entre 2 y 40 caracteres, texto entre 3 y 280 y calificación entera de 1 a
   5 en el servidor. La prueba de regresión, con token válido, rechazó 50.000
   caracteres con 400 y aceptó una reseña normal con 201. En la repetición
@@ -464,7 +493,7 @@ error agrega capas para cuando algo se escapa.
   Por separado, el test existente aceptó `/uploads/prueba.html`; falló en
   la primera aserción y **no** verificó dinámicamente la escritura fuera de
   `uploads/`.
-- **Corrección y verificación (en curso):** sólo se admite PNG RGB/RGBA de
+- **Corrección y verificación:** sólo se admite PNG RGB/RGBA de
   8 bits con extensión `.png`, base64 válido, firma y estructura de chunks/CRC
   coherentes y datos de imagen descomprimibles; hasta 2 MB, con dimensiones y
   salida descomprimida acotadas. Se genera un nombre UUID en el servidor y se
@@ -513,12 +542,13 @@ una ejecución anterior al pull se conservan fuera del repositorio en
 `D:\OpenCode\cafeteria-local\`; los archivos enlazados arriba corresponden
 únicamente a la ejecución sobre la base integrada.
 
-### Verificación parcial después de las correcciones propias
+### Verificación inicial después de las correcciones propias (histórica)
 
 Las pruebas se ejecutaron con Docker local y no borraron los pedidos ni las
 reseñas de demostración; las regresiones eliminaron únicamente sus datos
-marcados. Se mantiene pendiente la verificación manual posterior en el
-navegador y la integración de los cambios compartidos.
+marcados. Se registraron comprobaciones manuales posteriores en el navegador
+para los casos descritos arriba; otras operaciones y la integración de los
+cambios compartidos siguen pendientes.
 
 | Prueba | Resultado | Registro |
 |---|---|---|
@@ -530,13 +560,108 @@ navegador y la integración de los cambios compartidos.
 Además pasaron los dos casos específicos de CSRF y archivos de
 `tests/seguridad.test.ts`
 ([registro](evidencia/csrf-validacion/despues-test-seguridad-seleccion.txt)).
-El resto del bloque de validación de esa batería
-no constituye evidencia suficiente por sí solo: sus peticiones inválidas
-no mandan token y podrían recibir 403 por CSRF en vez de 400 por validación.
+En aquella ejecución, el resto del bloque de validación de esa batería
+no constituía evidencia suficiente por sí solo: sus peticiones inválidas
+no mandaban token y podían recibir 403 por CSRF en vez de 400 por validación.
 Por eso se añadieron regresiones propias con token y comprobación explícita
-de estado 400. `VAL-06` sigue dependiendo del manejador compartido de
-errores y `CSRF-02` de la configuración de la cookie de sesión.
+de estado 400. En el cierre posterior también se corrigió la batería original:
+las tres entradas inválidas envían token y exigen 400; el pedido legítimo
+de CSRF exige 201. `CSRF-02` se completó después de este registro histórico.
 
-### Reflexión
+### Verificación de cierre tras revisar la lista de tareas
 
-Pendiente de redactar tras implementar y verificar las correcciones.
+Se ejecutaron nuevamente los controles pertinentes contra Docker local.
+Las regresiones cubren IDs inválidos y fuera del rango de la base, estados
+permitidos y rechazados, límites de campos e ítems, límites de reseñas,
+login con token, separación entre token anónimo y autenticado, `SameSite`,
+contenido disfrazado de PNG, base64 inválido, corrupción de PNG y rutas
+Unix/Windows. Una prueba del script real del panel con DOM y red simulados
+comprueba que el formulario de login solicita y envía el token; no se
+presenta como una nueva prueba manual de navegador.
+
+| Prueba | Resultado | Registro |
+|---|---|---|
+| `npm test` | 28/28 ✔ | [Log](evidencia/csrf-validacion/cierre-npm-test.txt) |
+| `npm run typecheck` | Sin errores ✔ | [Log](evidencia/csrf-validacion/cierre-typecheck.txt) |
+| Regresiones propias | 17/17 ✔ | [Log](evidencia/csrf-validacion/cierre-regresiones.txt) |
+| Bloques CSRF y Validación de `seguridad.test.ts` | 5/5 ✔, con token válido en las pruebas de validación | [Log](evidencia/csrf-validacion/cierre-bloques-seguridad.txt) |
+| `npm run check:security` | CSRF-01..04 y VAL-01..05 ✔; VAL-06 pendiente. Global 11/37, **fallido** | [Log](evidencia/csrf-validacion/cierre-check-security.txt) |
+
+Comandos reproducibles dentro del contenedor:
+
+```sh
+npm test
+npm run typecheck
+node --import tsx --test --test-concurrency=1 tests/csrf-regresion.test.ts tests/validacion-regresion.test.ts tests/subidas-regresion.test.ts
+node --import tsx --test --test-concurrency=1 --test-name-pattern="Seguridad · (CSRF|Validación de entrada)" tests/seguridad.test.ts
+npm run check:security
+```
+
+Las adaptaciones a las pruebas de login y fuerza bruta permiten enviar
+token válido para que CSRF no oculte fallos de otros bloques. No se ejecutó
+la batería completa de seguridad ni la de fuerza bruta en este cierre.
+
+### Cierre local y dependencias de integración
+
+Se completó la implementación propia de CSRF, validación de pedidos y
+reseñas, y restricciones de subida. Se documentaron los siguientes resultados:
+
+| Caso manual posterior | Resultado |
+|---|---|
+| Pedido desde un formulario externo | 403 por origen no permitido |
+| Login normal del panel | Acceso correcto con cuenta administrativa de prueba; sin captura |
+| Cambio de contraseña desde formulario externo | 403 por origen no permitido; respuesta comunicada sin captura, sin comprobación independiente de la contraseña |
+| Cantidades −5 y `"abc"` | 400 por datos inválidos |
+| Reseña de 50.000 caracteres | 400 por datos inválidos |
+| Reseña breve | 201 y visualización en la página |
+| Subida HTML | 400 por formato no admitido |
+| Subida PNG | 200 y ruta con nombre generado; visualización manual sin captura |
+| Pedido legítimo | Respuesta con pedido 47 y cantidades válidas; sin captura ni estado HTTP registrado |
+
+Las capturas y los registros automáticos están enlazados en las secciones
+anteriores. Los logs `despues-*` se conservan como registro histórico;
+los logs `cierre-*` corresponden a la revisión final de la lista de tareas.
+
+Quedan como dependencias explícitas para la integración:
+
+- **Sesiones:** integrar el ciclo de vida y limpieza de tokens con la
+  rotación/expiración e invalidación de sesiones. El token obligatorio en
+  login y `SameSite=Lax` ya están implementados y probados; la seguridad
+  completa de los identificadores y el cierre de sesión sigue siendo
+  responsabilidad del bloque de sesiones.
+- **Configuración:** integrar el manejador de errores sin stack traces
+  (`VAL-06`) y coordinar las cabeceras y publicación de `/uploads/`.
+- **SQLi:** coordinar los cambios compartidos en `pedidos.service.ts` con
+  la parametrización de consultas.
+- **Verificación integrada:** comprobar las operaciones del sitio y del
+  panel afectadas por los cambios compartidos y volver a evaluar el checklist
+  global después de integrarlos. Su último resultado registrado es 11/37,
+  por lo que no se declara aprobado el proyecto completo.
+
+### Reflexión · Práctica 3: CSRF
+
+En un proyecto real, las operaciones que modifican datos deben exigir un
+token vinculado al visitante o a su sesión, también al iniciar sesión. El
+navegador debe enviar el token desde la interfaz; `SameSite` y la
+comprobación de origen son capas adicionales, no sustitutos. El rechazo
+por origen del formulario externo no demuestra por sí solo la validación
+del token: las regresiones cubren este control por separado. El ciclo de
+vida de los tokens debe integrarse con la expiración e invalidación de
+sesiones para que la defensa sea completa.
+
+### Reflexión · Práctica 4: Validación de entrada
+
+Los límites del formulario no reemplazan la validación del servidor: fue
+posible enviar cantidades inválidas y reseñas extensas modificando el
+cliente. En un proyecto real se comprueban tipos, formatos, longitudes,
+rangos e IDs antes de procesar o persistir. Para los archivos, la extensión
+no basta: se verifica el contenido PNG, se acota el tamaño y se genera el
+nombre en el servidor. Aceptar sólo PNG RGB/RGBA de 8 bits reduce los
+formatos admitidos y debe contemplarse al preparar las imágenes.
+
+Una prueba de datos inválidos debe usar un token válido para distinguir
+un **400 de validación** de un **403 por CSRF**. Comprobar también una
+reseña, un pedido y una imagen válidos permite verificar que los flujos
+legítimos siguen funcionando. Se distinguen las capturas, los resultados
+manuales sin captura y las pruebas automáticas para no atribuir a cada
+evidencia más alcance del que tiene.
