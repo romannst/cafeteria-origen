@@ -295,7 +295,7 @@ error agrega capas para cuando algo se escapa.
   local `prueba-csrf-contrasena.html` con un formulario `POST` sin token hacia
   `/api/admin/cambiar-contrasena`, usando la cuenta de prueba `func_admin`
   (ID **11**). Con la sesión iniciada, el envío desde ese archivo devolvió
-  **200 OK** y «Contraseña actualizada»; el usuario confirmó que restableció
+  **200 OK** y «Contraseña actualizada»; después de la prueba se restableció
   la contraseña original desde el panel. La operación autenticada aceptó el
   formulario externo sin token. La respuesta incluyó el campo `password`:
   **no** reproducir ni guardar su valor en las evidencias. Captura segura de
@@ -474,8 +474,23 @@ error agrega capas para cuando algo se escapa.
   `/uploads/` añade `nosniff`, CSP `sandbox` y descarga forzada para archivos
   anteriores no PNG, sin borrar la demostración. La prueba de regresión con
   sesión y token válidos rechazó HTML y contenido no PNG, aceptó un PNG
-  generado y comprobó su lectura. Coordinar la publicación compartida con
-  el trabajo de configuración; falta la verificación integral.
+  generado y comprobó su lectura. En la repetición manual desde el panel,
+  la carga útil mostró el archivo `prueba-roman-subida.html`; la respuesta
+  fue **400 Bad Request** con «Sólo se aceptan PNG de hasta 2 MB»:
+  [Carga útil](evidencia/csrf-validacion/despues-subida-html-carga-util.png),
+  [Respuesta](evidencia/csrf-validacion/despues-subida-html-respuesta.png)
+  y [Encabezados](evidencia/csrf-validacion/despues-subida-html-encabezados.png).
+  Estas capturas acreditan el rechazo de la petición, no una inspección
+  independiente del almacenamiento. En otra prueba manual desde el panel,
+  `prueba-subida.png` se aceptó con **200 OK**; la respuesta indicó
+  «Archivo subido.», **11.922 bytes** y una ruta `/uploads/` con nombre UUID:
+  [Carga útil](evidencia/csrf-validacion/despues-subida-png-carga-util.png),
+  [Respuesta](evidencia/csrf-validacion/despues-subida-png-respuesta.png)
+  y [Encabezados](evidencia/csrf-validacion/despues-subida-png-encabezados.png).
+  La lectura del PNG está cubierta por la regresión automática. Además,
+  Se abrió manualmente la ruta `/uploads/` devuelta y la imagen se visualizó
+  correctamente; esta comprobación visual **no tiene captura**.
+  Coordinar la publicación compartida con el trabajo de configuración.
 
 ### Verificación inicial sobre el código integrado
 
