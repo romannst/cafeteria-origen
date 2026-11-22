@@ -380,7 +380,28 @@ error agrega capas para cuando algo se escapa.
 - **Cómo se verificó hasta ahora:** `tests/validacion-regresion.test.ts`
   envió token CSRF válido, obtuvo 400 para −5, `"abc"`, cero, decimal y 101,
   comprobó que no aparecieron pedidos de la prueba y creó correctamente un
-  pedido legítimo. `npm test` aprobó 28/28; falta la prueba manual posterior.
+  pedido legítimo. `npm test` aprobó 28/28. En la comprobación manual
+  posterior, la interfaz envió mesa `4`, cliente ficticio `Prueba Roman`,
+  producto `3` y cantidad **−5**. El `POST /api/pedidos` devolvió
+  **400 Bad Request** con «Datos del pedido inválidos»:
+  [Carga útil](evidencia/csrf-validacion/despues-cantidad-negativa-carga-util.png),
+  [Respuesta](evidencia/csrf-validacion/despues-cantidad-negativa-respuesta.png)
+  y [Encabezados](evidencia/csrf-validacion/despues-cantidad-negativa-encabezados.png).
+  La captura muestra también un subtotal negativo calculado en el navegador
+  a partir del carrito alterado; no equivale a un pedido guardado. El 400
+  acredita que el servidor rechazó esa petición, aunque estas capturas
+  no verifican por sí solas el estado de la base de datos.
+  Se repitió manualmente el caso no numérico desde la interfaz: la carga
+  útil incluyó mesa `4`, cliente ficticio `Prueba Roman`, producto `13`
+  y cantidad **`"abc"`**. `POST /api/pedidos` devolvió **400 Bad Request**
+  con «Datos del pedido inválidos», sin el error PostgreSQL ni el stack
+  trace del caso anterior:
+  [Carga útil](evidencia/csrf-validacion/despues-cantidad-abc-carga-util.png),
+  [Respuesta](evidencia/csrf-validacion/despues-cantidad-abc-respuesta.png) y
+  [Encabezados](evidencia/csrf-validacion/despues-cantidad-abc-encabezados.png).
+  El total `0,00` visible en la página es un cálculo del cliente con el
+  carrito alterado, no un pedido aceptado. Tampoco se verificó de manera
+  independiente el estado de la base tras este envío.
 
 ### VUL-11 · Reseñas sin límite de longitud
 
@@ -402,8 +423,24 @@ error agrega capas para cuando algo se escapa.
 - **Corrección y verificación (en curso):** `src/validacion.ts` exige autor
   entre 2 y 40 caracteres, texto entre 3 y 280 y calificación entera de 1 a
   5 en el servidor. La prueba de regresión, con token válido, rechazó 50.000
-  caracteres con 400 y aceptó una reseña normal con 201. Pendiente comprobar
-  visualmente que se siga mostrando como texto tras el cambio XSS.
+  caracteres con 400 y aceptó una reseña normal con 201. En la repetición
+  manual, la carga útil de `POST /api/comentarios` mostró autor ficticio
+  `Prueba Roman`, calificación **5** y texto de **50,0 kB**; el servidor
+  respondió **400 Bad Request** con «Datos de reseña inválidos»:
+  [Carga útil](evidencia/csrf-validacion/despues-resena-extensa-carga-util.png),
+  [Respuesta](evidencia/csrf-validacion/despues-resena-extensa-respuesta.png)
+  y [Encabezados](evidencia/csrf-validacion/despues-resena-extensa-encabezados.png).
+  Las capturas muestran el rechazo de la petición, pero no verifican por
+  separado el estado de la base. La prueba manual con un texto breve de
+  letras `a`, autor ficticio `Prueba Roman` y calificación **3** devolvió la
+  reseña **ID 8** con **201 Created**; la página mostró el texto y el
+  mensaje de confirmación:
+  [Carga útil](evidencia/csrf-validacion/despues-resena-normal-carga-util.png),
+  [Respuesta](evidencia/csrf-validacion/despues-resena-normal-respuesta.png)
+  y [Encabezados](evidencia/csrf-validacion/despues-resena-normal-encabezados.png).
+  Se conserva esa reseña. Esta prueba comprueba publicación y visualización
+  del texto, **no** demuestra por sí sola el tratamiento seguro de etiquetas
+  HTML; esa verificación corresponde a la evidencia XSS.
 
 ### VUL-12 · Subida de archivos sin restricciones
 
