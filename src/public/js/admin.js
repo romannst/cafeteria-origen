@@ -74,7 +74,7 @@
   function api(url, opciones) {
     var config = Object.assign({}, opciones || {});
     var metodo = (config.method || 'GET').toUpperCase();
-    var preparar = ['GET', 'HEAD', 'OPTIONS'].indexOf(metodo) === -1 && url !== '/auth/login'
+    var preparar = ['GET', 'HEAD', 'OPTIONS'].indexOf(metodo) === -1
       ? fetch(API + '/csrf-token').then(function (res) {
         if (!res.ok) throw new Error('No se pudo obtener el token CSRF.');
         return res.json();

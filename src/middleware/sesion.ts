@@ -7,9 +7,8 @@
  * 1. El identificador de sesión es un contador incremental (`sesion_1`,
  *    `sesion_2`, ...): es PREDECIBLE y adivinable. Un atacante puede recorrer
  *    los valores y usurpar la sesión de otro usuario (fijación de sesión).
- * 2. La cookie se emite SIN `httpOnly` (JavaScript puede leerla), SIN `secure`
- *    (viaja en texto plano por HTTP) y SIN `sameSite` (el navegador la manda
- *    también en peticiones desde otros sitios → facilita CSRF).
+ * 2. La cookie se emite SIN `httpOnly` (JavaScript puede leerla) y SIN `secure`
+ *    (viaja en texto plano por HTTP). SameSite=Lax se agrega como defensa CSRF.
  * 3. Las sesiones NO expiran nunca.
  * 4. Al iniciar sesión no se regenera el identificador.
  * 5. El cierre de sesión sólo borra la cookie del cliente: la sesión sigue
@@ -58,8 +57,8 @@ export function crearSesion(req: Request, res: Response, usuario: UsuarioSesion)
     expiraEn: null,
   });
 
-  // FALLA: cookie sin httpOnly / secure / sameSite.
-  res.cookie('sid', id, { path: '/' });
+  // SameSite complementa el token CSRF; HttpOnly/Secure dependen de sesiones.
+  res.cookie('sid', id, { path: '/', sameSite: 'lax' });
 
   return id;
 }

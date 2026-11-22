@@ -42,18 +42,13 @@ export const protegerCsrf: RequestHandler = (req, res, next) => {
     }
   }
 
-  // Login: se exige el origen correcto cuando está presente, pero se conserva
-  // la compatibilidad con los clientes que todavía inician sesión sin token.
-  // Coordinar token obligatorio en login con las pruebas del bloque de auth.
-  if (req.path === '/auth/login') return next();
-
   const id = clave(req);
   const esperado = id && tokens.get(id);
   const recibido = req.get('X-CSRF-Token') || req.body?._csrf || req.query._csrf;
   if (
     typeof esperado !== 'string' ||
     typeof recibido !== 'string' ||
-    recibido.length !== esperado.length ||
+    !/^[a-f0-9]{64}$/.test(recibido) ||
     !timingSafeEqual(Buffer.from(recibido), Buffer.from(esperado))
   ) {
     return res.status(403).json({ error: 'Token CSRF inválido o ausente.' });
