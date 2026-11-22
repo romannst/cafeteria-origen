@@ -1,26 +1,42 @@
 import express from 'express';
 import * as pedidos from '../services/pedidos.service';
+import { pedidoValido, estadoValido, idValido } from '../validacion';
 
 const router = express.Router();
+
+router.param('id', (req, res, next, id) => {
+  if (!idValido(id)) return res.status(400).json({ error: 'ID de pedido inválido.' });
+  next();
+});
 
 /**
  * POST /api/pedidos
  * Crea un pedido y devuelve su total calculado.
  *
- * FALLAS:
- *  - CSRF: no hay token anti-CSRF ni verificación de Origin/Referer, y la
- *    cookie de sesión no tiene SameSite. Una página externa puede POSTear
- *    con las cookies de la víctima.
- *  - Validación de entrada débil: no se valida tipo, rango ni longitud de
- *    `cantidad`, `mesa`, `cliente` ni de la lista de items.
+ * Token CSRF: aplicado en src/app.ts. Tipo, rango y longitud de las entradas
+ * se validan antes de insertar el pedido. La cookie `sid` depende del bloque
+ * de sesiones.
+ * FALLA pendiente de otro bloque:
  *  - No requiere autenticación ni rol.
  */
 router.post('/', async (req, res, next) => {
   try {
+    if (!pedidoValido(req.body)) {
+      return res.status(400).json({ error: 'Datos del pedido inválidos.' });
+    }
     const { mesa, cliente, items } = req.body || {};
-    const pedido = await pedidos.crear({ mesa, cliente, items });
+    const pedido = await pedidos.crear({
+      mesa, cliente,
+      items: items.map((item: { productoId: number | string; cantidad: number | string }) => ({
+        productoId: Number(item.productoId),
+        cantidad: Number(item.cantidad),
+      })),
+    });
     res.status(201).json(pedido);
   } catch (err) {
+    if ((err as { status?: number }).status === 400) {
+      return res.status(400).json({ error: 'Producto no encontrado.' });
+    }
     next(err);
   }
 });
@@ -61,8 +77,9 @@ router.get('/:id', async (req, res, next) => {
 router.patch('/:id/estado', async (req, res, next) => {
   try {
     const { estado } = req.body || {};
-    // FALLA: no se valida el valor de `estado` (cualquier texto se acepta)
-    // ni se comprueba el rol del que modifica el pedido.
+    if (!estadoValido(estado)) {
+      return res.status(400).json({ error: 'Estado de pedido inválido.' });
+    }
     const pedido = await pedidos.cambiarEstado(req.params.id, estado);
     if (!pedido) {
       return res.status(404).json({ error: 'Pedido no encontrado.' });

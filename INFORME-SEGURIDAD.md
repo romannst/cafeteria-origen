@@ -13,7 +13,7 @@ La evidencia de los tests (salida real, antes y después) está en
 
 ## Cross-Site Scripting (XSS)
 
-**Responsable:** Castellini, Nicolás (Integrante 2)
+**Responsable:** Castellini, Nicolás
 **Fallas:** VUL-05, VUL-06, VUL-07, VUL-08 · **OWASP:** A03:2021 — Injection
 
 ### Qué es y por qué importa
@@ -256,3 +256,412 @@ conviene que la forma **por defecto** de mostrar datos sea segura (`textContent`
 o un framework que escape automáticamente) y que insertar HTML sea la excepción,
 explícita y revisada. Sumar una CSP y no reflejar la entrada en los mensajes de
 error agrega capas para cuando algo se escapa.
+
+---
+
+## CSRF y validación de entrada
+
+**Responsable:** Strizzi, Román
+**Fallas:** VUL-09, VUL-10, VUL-11, VUL-12
+
+> Estado: línea de base registrada sobre `dev` integrado (commit `7551757`).
+> Implementación propia y evidencia de los casos descritos documentadas.
+> El cierre local conserva dependencias de sesiones, configuración e integración;
+> no equivale a la aprobación global de seguridad del proyecto.
+
+### VUL-09 · Operaciones sin protección CSRF
+
+- **Qué es y por qué importa:** otra página puede inducir peticiones que
+  modifican datos sin que la persona haya iniciado esa acción.
+- **Dónde:** `src/routes/pedidos.routes.ts`, `comentarios.routes.ts`,
+  `admin.routes.ts`, `auth.routes.ts`, `src/public/js/app.js` y `admin.js`.
+- **Por qué ocurría:** antes de la corrección no había token anti-CSRF emitido
+  y validado por el servidor en las peticiones que cambian estado; el
+  frontend tampoco lo enviaba.
+- **Cómo se observó manualmente:** se abrió una página HTML local ajena a la
+  aplicación y se envió una sola vez, pulsando el botón, un formulario sin
+  token a `POST http://localhost:8080/api/pedidos`. A diferencia del ejemplo
+  de la guía, se usaron campos `items[0][productoId]` e
+  `items[0][cantidad]` para que el servidor recibiera una lista válida. La
+  carga útil muestra mesa `99`, cliente ficticio `Prueba CSRF`, producto
+  **19** y cantidad **1**; la respuesta devuelve el pedido **28** con total
+  **2500.00** y los encabezados confirman **201 Created**. Se aceptó la
+  operación sin token desde una página local; conservar el pedido. Esta
+  prueba del endpoint público, por sí sola, **no** demuestra envío de cookies
+  de la sesión administrativa. Capturas:
+  [Carga útil](evidencia/csrf-validacion/antes-csrf-pedido-28-carga-util.png),
+  [Respuesta](evidencia/csrf-validacion/antes-csrf-pedido-28-respuesta.png) y
+  [Encabezados](evidencia/csrf-validacion/antes-csrf-pedido-28-encabezados.png).
+  **Cambio de contraseña, observación manual separada:** se abrió el archivo
+  local `prueba-csrf-contrasena.html` con un formulario `POST` sin token hacia
+  `/api/admin/cambiar-contrasena`, usando la cuenta de prueba `func_admin`
+  (ID **11**). Con la sesión iniciada, el envío desde ese archivo devolvió
+  **200 OK** y «Contraseña actualizada»; después de la prueba se restableció
+  la contraseña original desde el panel. La operación autenticada aceptó el
+  formulario externo sin token. La respuesta incluyó el campo `password`:
+  **no** reproducir ni guardar su valor en las evidencias. Captura segura de
+  [Encabezados](evidencia/csrf-validacion/antes-csrf-contrasena-encabezados.png)
+  (sin contraseña ni cookie visible). Por separado, el test existente no
+  encontró token.
+- **Corrección y decisiones:** `src/middleware/csrf.ts` emite
+  `GET /api/csrf-token` con token aleatorio vinculado a la sesión autenticada
+  o a una cookie anónima `HttpOnly; SameSite=Lax`. `src/app.ts` comprueba el
+  token en escrituras y compara `Origin`/`Referer` cuando se envían;
+  `app.js` y `admin.js` lo solicitan y mandan en `X-CSRF-Token`, incluido
+  el login del panel. Se eliminó la excepción inicial del login y se adaptaron
+  los clientes de pruebas para enviar token. La cookie `sid` incorpora
+  `SameSite=Lax`. Los tokens recibidos deben ser hexadecimales de 64 caracteres
+  antes de compararlos, evitando errores internos por diferencias de bytes
+  con texto Unicode. El token anónimo no sirve tras autenticarse; el token
+  autenticado tampoco sirve cuando el navegador ya no envía la sesión.
+  El almacén de tokens en memoria aún no tiene limpieza ni TTL propio:
+  coordinar su ciclo de vida con la rotación, expiración e invalidación de
+  sesiones. No se deshicieron los cambios XSS.
+- **Cómo se verificó hasta ahora:** el caso CSRF existente pasó con pedido
+  válido y token; `tests/csrf-regresion.test.ts` comprueba rechazo sin token,
+  con token de otro visitante y con origen ajeno. Typecheck y sintaxis JS
+  aprobados; `npm test` conserva 28/28. Al reenviar manualmente el formulario
+  local que antes había creado el pedido 28, `POST /api/pedidos` devolvió
+  **403 Forbidden** con «Origen de petición no permitido»:
+  [Respuesta](evidencia/csrf-validacion/despues-csrf-pedido-respuesta.png) y
+  [Encabezados](evidencia/csrf-validacion/despues-csrf-pedido-encabezados.png).
+  Esto comprueba el rechazo **por origen** en ese intento, no la validación
+  del token por sí sola; esta última se comprobó con las regresiones.
+  El login, `SameSite` y la separación de tokens entre visitantes y sesiones
+  se verificaron posteriormente con las pruebas de cierre; el ciclo de vida
+  de las sesiones requiere integración con su bloque. Además, se inició
+  sesión manualmente con una cuenta administrativa de prueba y se accedió
+  correctamente al panel tras exigir token en el login; esta comprobación
+  **no tiene captura** y no expone credenciales. Con la sesión abierta, se
+  repitió una sola vez el formulario local externo dirigido a
+  `POST http://localhost:8080/api/admin/cambiar-contrasena`: los encabezados
+  indicaron **403 Forbidden** y la respuesta fue
+  `{"error":"Origen de petición no permitido."}`. Este resultado se
+  comunicó en la conversación, **sin captura**; acredita rechazo por origen,
+  no una prueba aislada del token ni una comprobación independiente de la
+  contraseña almacenada.
+
+### VUL-10 · Pedidos sin validación suficiente
+
+- **Qué es y por qué importa:** una cantidad negativa altera los totales; tipos
+  inválidos pueden acabar en errores internos en vez de rechazarse.
+- **Dónde:** `src/services/pedidos.service.ts` y
+  `src/routes/pedidos.routes.ts`.
+- **Por qué ocurría:** la entrada HTTP no se validaba en tiempo de ejecución
+  antes de procesarla o persistirla; los tipos TypeScript no validan peticiones.
+- **Cómo se observó manualmente:** se cambió `origen.carrito` en Local Storage,
+  se recargó el sitio y se envió un pedido por la interfaz. En la primera
+  observación, la **Vista previa** de Network mostraba el pedido **13**,
+  mesa **4**, cliente ficticio `Demo Roman P3`, producto **19** (muffin),
+  cantidad **−5** y total **−12500.00**. Una consulta de lectura a
+  `GET /api/pedidos/13` lo confirmó en ese momento; no se registró el estado
+  HTTP de aquella petición original. Tras cambiar de sesión, se repitió la
+  demostración sin borrar pedidos: las tres capturas aportadas en la
+  conversación muestran la **Carga útil** (`mesa: "6"`,
+  `cliente: "Prueba Roman P3"`, producto **19**, cantidad **−5**), la
+  **Respuesta** (pedido **25**, estado `abierto`, total **−12500.00**) y
+  **Encabezados → General** (`POST http://localhost:8080/api/pedidos`,
+  **201 Created**). Esto confirma que el servidor aceptó y guardó la cantidad
+  negativa; no fue sólo un cálculo del navegador. Capturas:
+  [Carga útil](evidencia/csrf-validacion/antes-pedido-25-carga-util.png),
+  [Respuesta](evidencia/csrf-validacion/antes-pedido-25-respuesta.png) y
+  [Encabezados](evidencia/csrf-validacion/antes-pedido-25-encabezados.png).
+- **Cantidad no numérica, observación manual:** se cambió la cantidad del
+  carrito a `"abc"` y se envió el pedido desde la interfaz. La solicitud
+  `POST /api/pedidos` contenía mesa `"6"`, cliente ficticio
+  `Prueba Roman P3` e `items` con producto `"16"` y cantidad `"abc"`.
+  La guía propone cambiar `type="number"` por `type="text"` en DevTools;
+  en esta interfaz se alteró `origen.carrito` en Local Storage en su lugar,
+  sin cambiar el atributo HTML. La carga útil confirma que `"abc"` llegó
+  al servidor.
+  El servidor respondió **500 Internal Server Error**, con el error
+  `invalid input syntax for type integer: "abc"` y un stack trace en el
+  cuerpo. No se comprobó de forma independiente si hubo una escritura parcial
+  en la base. Esto evidencia que la cantidad no se rechaza antes de llegar a
+  la base. La exposición del stack trace (`VAL-06`) se coordina con el trabajo
+  de configuración. Capturas:
+  [Carga útil](evidencia/csrf-validacion/antes-cantidad-abc-carga-util.png),
+  [Respuesta](evidencia/csrf-validacion/antes-cantidad-abc-respuesta.png) y
+  [Encabezados](evidencia/csrf-validacion/antes-cantidad-abc-encabezados.png).
+- **Otras observaciones automatizadas:** el test creó un pedido con total
+  negativo (`-28700.00`) y una cantidad `"muchos"` produjo HTTP 500.
+  Estos resultados se distinguen de las demostraciones manuales anteriores.
+- **Corrección y decisiones:** `src/validacion.ts` comprueba la
+  forma de los items, IDs enteros positivos, cantidades entre 1 y 100,
+  hasta 20 items, mesa numérica (1–10 caracteres), nombre (2–40) y estados
+  permitidos antes de escribir. Los IDs se acotan a 1..2147483647, rango de
+  las columnas INTEGER de PostgreSQL. También se validan los parámetros
+  `:id` de pedidos y del panel antes de llamar al servicio; el catálogo
+  conserva su respuesta genérica 404 para IDs inválidos. La ruta transforma
+  los números recibidos de formularios a números reales; un producto
+  inexistente devuelve 400.
+  Coordinar los cambios puntuales en `pedidos.service.ts` con el trabajo de
+  parametrización SQL.
+- **Cómo se verificó hasta ahora:** `tests/validacion-regresion.test.ts`
+  envió token CSRF válido, obtuvo 400 para −5, `"abc"`, cero, decimal y 101,
+  comprobó que no aparecieron pedidos de la prueba y creó correctamente un
+  pedido legítimo. `npm test` aprobó 28/28. En la comprobación manual
+  posterior, la interfaz envió mesa `4`, cliente ficticio `Prueba Roman`,
+  producto `3` y cantidad **−5**. El `POST /api/pedidos` devolvió
+  **400 Bad Request** con «Datos del pedido inválidos»:
+  [Carga útil](evidencia/csrf-validacion/despues-cantidad-negativa-carga-util.png),
+  [Respuesta](evidencia/csrf-validacion/despues-cantidad-negativa-respuesta.png)
+  y [Encabezados](evidencia/csrf-validacion/despues-cantidad-negativa-encabezados.png).
+  La captura muestra también un subtotal negativo calculado en el navegador
+  a partir del carrito alterado; no equivale a un pedido guardado. El 400
+  acredita que el servidor rechazó esa petición, aunque estas capturas
+  no verifican por sí solas el estado de la base de datos.
+  Se repitió manualmente el caso no numérico desde la interfaz: la carga
+  útil incluyó mesa `4`, cliente ficticio `Prueba Roman`, producto `13`
+  y cantidad **`"abc"`**. `POST /api/pedidos` devolvió **400 Bad Request**
+  con «Datos del pedido inválidos», sin el error PostgreSQL ni el stack
+  trace del caso anterior:
+  [Carga útil](evidencia/csrf-validacion/despues-cantidad-abc-carga-util.png),
+  [Respuesta](evidencia/csrf-validacion/despues-cantidad-abc-respuesta.png) y
+  [Encabezados](evidencia/csrf-validacion/despues-cantidad-abc-encabezados.png).
+  El total `0,00` visible en la página es un cálculo del cliente con el
+  carrito alterado, no un pedido aceptado. Tampoco se verificó de manera
+  independiente el estado de la base tras este envío. Como comprobación
+  manual de una operación legítima, la respuesta de un pedido desde la
+  interfaz devolvió el pedido **47**, mesa `4`, cliente ficticio
+  `Prueba pedido normal`, estado `abierto` y total **13180.00**: producto
+  **6** (Espresso Taza grande Colombia) y producto **20** (Porción de
+  torta selva negra), ambos con cantidad **1**. Se registró el cuerpo de
+  la respuesta en la conversación; no se aportaron captura ni estado HTTP
+  de esa petición. Este resultado muestra que el flujo legítimo devuelve
+  un pedido, pero no verifica por sí solo el token CSRF ni una consulta
+  independiente a la base de datos.
+
+### VUL-11 · Reseñas sin límite de longitud
+
+- **Dónde:** `src/routes/comentarios.routes.ts`.
+- **Por qué ocurría:** no se limitaba el tipo ni la longitud de los campos
+  antes de guardar la reseña.
+- **Cómo se observó manualmente:** se quitó temporalmente `maxlength="280"`
+  del campo de texto en DevTools y se envió una reseña de 50.000 caracteres
+  `A` desde la interfaz, con autor ficticio `Prueba Roman P3` y calificación
+  **4**. La carga útil muestra el texto extenso (50,0 kB); la respuesta
+  devuelve la reseña con **ID 3** y el texto, y los encabezados confirman
+  `POST http://localhost:8080/api/comentarios` con **201 Created**. El
+  servidor aceptó la reseña pese al límite del formulario. Capturas:
+  [Carga útil](evidencia/csrf-validacion/antes-resena-extensa-carga-util.png),
+  [Respuesta](evidencia/csrf-validacion/antes-resena-extensa-respuesta.png) y
+  [Encabezados](evidencia/csrf-validacion/antes-resena-extensa-encabezados.png).
+  Conservar la reseña. Por separado, el test existente había guardado una
+  reseña de 5000 caracteres.
+- **Corrección y verificación:** `src/validacion.ts` exige autor
+  entre 2 y 40 caracteres, texto entre 3 y 280 y calificación entera de 1 a
+  5 en el servidor. La prueba de regresión, con token válido, rechazó 50.000
+  caracteres con 400 y aceptó una reseña normal con 201. En la repetición
+  manual, la carga útil de `POST /api/comentarios` mostró autor ficticio
+  `Prueba Roman`, calificación **5** y texto de **50,0 kB**; el servidor
+  respondió **400 Bad Request** con «Datos de reseña inválidos»:
+  [Carga útil](evidencia/csrf-validacion/despues-resena-extensa-carga-util.png),
+  [Respuesta](evidencia/csrf-validacion/despues-resena-extensa-respuesta.png)
+  y [Encabezados](evidencia/csrf-validacion/despues-resena-extensa-encabezados.png).
+  Las capturas muestran el rechazo de la petición, pero no verifican por
+  separado el estado de la base. La prueba manual con un texto breve de
+  letras `a`, autor ficticio `Prueba Roman` y calificación **3** devolvió la
+  reseña **ID 8** con **201 Created**; la página mostró el texto y el
+  mensaje de confirmación:
+  [Carga útil](evidencia/csrf-validacion/despues-resena-normal-carga-util.png),
+  [Respuesta](evidencia/csrf-validacion/despues-resena-normal-respuesta.png)
+  y [Encabezados](evidencia/csrf-validacion/despues-resena-normal-encabezados.png).
+  Se conserva esa reseña. Esta prueba comprueba publicación y visualización
+  del texto, **no** demuestra por sí sola el tratamiento seguro de etiquetas
+  HTML; esa verificación corresponde a la evidencia XSS.
+
+### VUL-12 · Subida de archivos sin restricciones
+
+- **Dónde:** `src/routes/admin.routes.ts`, endpoint
+  `POST /api/admin/subir-archivo`; publicación en `src/app.ts`.
+- **Por qué ocurría:** se aceptaba contenido base64 y el nombre provisto por el
+  cliente sin comprobar formato real, extensión, tamaño ni ruta de destino.
+- **Cómo se observó manualmente:** desde Productos → «Subir imagen», se envió
+  el archivo inocuo `prueba-roman-subida.html` a la instalación local. La
+  carga útil muestra el nombre `.html` y su contenido base64; la respuesta
+  indica `Archivo subido.`, **97 bytes** y la ruta
+  `/uploads/prueba-roman-subida.html`. Los encabezados muestran
+  `POST http://localhost:8080/api/admin/subir-archivo` con **200 OK**. Al
+  abrir la ruta en el navegador se mostró el contenido del archivo (con un
+  carácter acentuado mal codificado). Esto demuestra que se acepta y sirve
+  HTML desde el mismo origen; **no** se probó ejecución de scripts. Capturas:
+  [Carga útil](evidencia/csrf-validacion/antes-subida-html-carga-util.png),
+  [Respuesta](evidencia/csrf-validacion/antes-subida-html-respuesta.png),
+  [Encabezados](evidencia/csrf-validacion/antes-subida-html-encabezados.png) y
+  [Apertura](evidencia/csrf-validacion/antes-subida-html-apertura.png).
+  Por separado, el test existente aceptó `/uploads/prueba.html`; falló en
+  la primera aserción y **no** verificó dinámicamente la escritura fuera de
+  `uploads/`.
+- **Corrección y verificación:** sólo se admite PNG RGB/RGBA de
+  8 bits con extensión `.png`, base64 válido, firma y estructura de chunks/CRC
+  coherentes y datos de imagen descomprimibles; hasta 2 MB, con dimensiones y
+  salida descomprimida acotadas. Se genera un nombre UUID en el servidor y se
+  escribe con exclusividad en `uploads/` sin usar el nombre recibido como
+  ruta. Se decidió **no aceptar SVG ni JPEG** en este bloque: PNG cubre el
+  uso de imagen sin incorporar formatos activos. La publicación de
+  `/uploads/` añade `nosniff`, CSP `sandbox` y descarga forzada para archivos
+  anteriores no PNG, sin borrar la demostración. La prueba de regresión con
+  sesión y token válidos rechazó HTML y contenido no PNG, aceptó un PNG
+  generado y comprobó su lectura. En la repetición manual desde el panel,
+  la carga útil mostró el archivo `prueba-roman-subida.html`; la respuesta
+  fue **400 Bad Request** con «Sólo se aceptan PNG de hasta 2 MB»:
+  [Carga útil](evidencia/csrf-validacion/despues-subida-html-carga-util.png),
+  [Respuesta](evidencia/csrf-validacion/despues-subida-html-respuesta.png)
+  y [Encabezados](evidencia/csrf-validacion/despues-subida-html-encabezados.png).
+  Estas capturas acreditan el rechazo de la petición, no una inspección
+  independiente del almacenamiento. En otra prueba manual desde el panel,
+  `prueba-subida.png` se aceptó con **200 OK**; la respuesta indicó
+  «Archivo subido.», **11.922 bytes** y una ruta `/uploads/` con nombre UUID:
+  [Carga útil](evidencia/csrf-validacion/despues-subida-png-carga-util.png),
+  [Respuesta](evidencia/csrf-validacion/despues-subida-png-respuesta.png)
+  y [Encabezados](evidencia/csrf-validacion/despues-subida-png-encabezados.png).
+  La lectura del PNG está cubierta por la regresión automática. Además,
+  Se abrió manualmente la ruta `/uploads/` devuelta y la imagen se visualizó
+  correctamente; esta comprobación visual **no tiene captura**.
+  Coordinar la publicación compartida con el trabajo de configuración.
+
+### Verificación inicial sobre el código integrado
+
+Ejecutada antes de corregir esta sección, en la rama `roman-strizzi` desde
+`dev` (`7551757`), sólo contra la instalación local:
+
+| Prueba | Resultado | Registro |
+|---|---|---|
+| `npm test` | 28/28 ✔ | [`antes-npm-test.txt`](evidencia/csrf-validacion/antes-npm-test.txt) |
+| `npm run typecheck` | Sin errores ✔ | [`antes-typecheck.txt`](evidencia/csrf-validacion/antes-typecheck.txt) |
+| Bloques CSRF y Validación de entrada de `seguridad.test.ts` | 0/5; fallan como se espera en la base vulnerable | [`antes-test-seguridad.txt`](evidencia/csrf-validacion/antes-test-seguridad.txt) |
+| `npm run check:security` | 5/37 controles críticos; 32 pendientes y 5 recomendados pendientes | [`antes-check-security.txt`](evidencia/csrf-validacion/antes-check-security.txt) |
+
+En esta línea de base aún no se había ejecutado la batería completa de
+seguridad ni las verificaciones posteriores. El checklist ya marcaba `VAL-01`
+en verde por el control de ID
+incorporado por XSS; `CSRF-02` (cookie) depende del trabajo de sesiones y
+`VAL-06` (stack traces) del trabajo de configuración. Los logs iniciales de
+una ejecución anterior al pull se conservan fuera del repositorio en
+`D:\OpenCode\cafeteria-local\`; los archivos enlazados arriba corresponden
+únicamente a la ejecución sobre la base integrada.
+
+### Verificación inicial después de las correcciones propias (histórica)
+
+Las pruebas se ejecutaron con Docker local y no borraron los pedidos ni las
+reseñas de demostración; las regresiones eliminaron únicamente sus datos
+marcados. Se registraron comprobaciones manuales posteriores en el navegador
+para los casos descritos arriba; otras operaciones y la integración de los
+cambios compartidos siguen pendientes.
+
+| Prueba | Resultado | Registro |
+|---|---|---|
+| `npm test` | 28/28 ✔ | [`despues-npm-test.txt`](evidencia/csrf-validacion/despues-npm-test.txt) |
+| `npm run typecheck` | Sin errores ✔ | [`despues-typecheck.txt`](evidencia/csrf-validacion/despues-typecheck.txt) |
+| Regresiones propias de CSRF, validación y subidas | 9/9 ✔; entradas inválidas probadas con token válido | [`despues-regresiones.txt`](evidencia/csrf-validacion/despues-regresiones.txt) |
+| `npm run check:security` | 10/37 controles críticos aprobados; resultado global **fallido** por controles de otros bloques y dependencias `CSRF-02` y `VAL-06` | [`despues-check-security.txt`](evidencia/csrf-validacion/despues-check-security.txt) |
+
+Además pasaron los dos casos específicos de CSRF y archivos de
+`tests/seguridad.test.ts`
+([registro](evidencia/csrf-validacion/despues-test-seguridad-seleccion.txt)).
+En aquella ejecución, el resto del bloque de validación de esa batería
+no constituía evidencia suficiente por sí solo: sus peticiones inválidas
+no mandaban token y podían recibir 403 por CSRF en vez de 400 por validación.
+Por eso se añadieron regresiones propias con token y comprobación explícita
+de estado 400. En el cierre posterior también se corrigió la batería original:
+las tres entradas inválidas envían token y exigen 400; el pedido legítimo
+de CSRF exige 201. `CSRF-02` se completó después de este registro histórico.
+
+### Verificación de cierre tras revisar la lista de tareas
+
+Se ejecutaron nuevamente los controles pertinentes contra Docker local.
+Las regresiones cubren IDs inválidos y fuera del rango de la base, estados
+permitidos y rechazados, límites de campos e ítems, límites de reseñas,
+login con token, separación entre token anónimo y autenticado, `SameSite`,
+contenido disfrazado de PNG, base64 inválido, corrupción de PNG y rutas
+Unix/Windows. Una prueba del script real del panel con DOM y red simulados
+comprueba que el formulario de login solicita y envía el token; no se
+presenta como una nueva prueba manual de navegador.
+
+| Prueba | Resultado | Registro |
+|---|---|---|
+| `npm test` | 28/28 ✔ | [Log](evidencia/csrf-validacion/cierre-npm-test.txt) |
+| `npm run typecheck` | Sin errores ✔ | [Log](evidencia/csrf-validacion/cierre-typecheck.txt) |
+| Regresiones propias | 17/17 ✔ | [Log](evidencia/csrf-validacion/cierre-regresiones.txt) |
+| Bloques CSRF y Validación de `seguridad.test.ts` | 5/5 ✔, con token válido en las pruebas de validación | [Log](evidencia/csrf-validacion/cierre-bloques-seguridad.txt) |
+| `npm run check:security` | CSRF-01..04 y VAL-01..05 ✔; VAL-06 pendiente. Global 11/37, **fallido** | [Log](evidencia/csrf-validacion/cierre-check-security.txt) |
+
+Comandos reproducibles dentro del contenedor:
+
+```sh
+npm test
+npm run typecheck
+node --import tsx --test --test-concurrency=1 tests/csrf-regresion.test.ts tests/validacion-regresion.test.ts tests/subidas-regresion.test.ts
+node --import tsx --test --test-concurrency=1 --test-name-pattern="Seguridad · (CSRF|Validación de entrada)" tests/seguridad.test.ts
+npm run check:security
+```
+
+Las adaptaciones a las pruebas de login y fuerza bruta permiten enviar
+token válido para que CSRF no oculte fallos de otros bloques. No se ejecutó
+la batería completa de seguridad ni la de fuerza bruta en este cierre.
+
+### Cierre local y dependencias de integración
+
+Se completó la implementación propia de CSRF, validación de pedidos y
+reseñas, y restricciones de subida. Se documentaron los siguientes resultados:
+
+| Caso manual posterior | Resultado |
+|---|---|
+| Pedido desde un formulario externo | 403 por origen no permitido |
+| Login normal del panel | Acceso correcto con cuenta administrativa de prueba; sin captura |
+| Cambio de contraseña desde formulario externo | 403 por origen no permitido; respuesta comunicada sin captura, sin comprobación independiente de la contraseña |
+| Cantidades −5 y `"abc"` | 400 por datos inválidos |
+| Reseña de 50.000 caracteres | 400 por datos inválidos |
+| Reseña breve | 201 y visualización en la página |
+| Subida HTML | 400 por formato no admitido |
+| Subida PNG | 200 y ruta con nombre generado; visualización manual sin captura |
+| Pedido legítimo | Respuesta con pedido 47 y cantidades válidas; sin captura ni estado HTTP registrado |
+
+Las capturas y los registros automáticos están enlazados en las secciones
+anteriores. Los logs `despues-*` se conservan como registro histórico;
+los logs `cierre-*` corresponden a la revisión final de la lista de tareas.
+
+Quedan como dependencias explícitas para la integración:
+
+- **Sesiones:** integrar el ciclo de vida y limpieza de tokens con la
+  rotación/expiración e invalidación de sesiones. El token obligatorio en
+  login y `SameSite=Lax` ya están implementados y probados; la seguridad
+  completa de los identificadores y el cierre de sesión sigue siendo
+  responsabilidad del bloque de sesiones.
+- **Configuración:** integrar el manejador de errores sin stack traces
+  (`VAL-06`) y coordinar las cabeceras y publicación de `/uploads/`.
+- **SQLi:** coordinar los cambios compartidos en `pedidos.service.ts` con
+  la parametrización de consultas.
+- **Verificación integrada:** comprobar las operaciones del sitio y del
+  panel afectadas por los cambios compartidos y volver a evaluar el checklist
+  global después de integrarlos. Su último resultado registrado es 11/37,
+  por lo que no se declara aprobado el proyecto completo.
+
+### Reflexión · Práctica 3: CSRF
+
+En un proyecto real, las operaciones que modifican datos deben exigir un
+token vinculado al visitante o a su sesión, también al iniciar sesión. El
+navegador debe enviar el token desde la interfaz; `SameSite` y la
+comprobación de origen son capas adicionales, no sustitutos. El rechazo
+por origen del formulario externo no demuestra por sí solo la validación
+del token: las regresiones cubren este control por separado. El ciclo de
+vida de los tokens debe integrarse con la expiración e invalidación de
+sesiones para que la defensa sea completa.
+
+### Reflexión · Práctica 4: Validación de entrada
+
+Los límites del formulario no reemplazan la validación del servidor: fue
+posible enviar cantidades inválidas y reseñas extensas modificando el
+cliente. En un proyecto real se comprueban tipos, formatos, longitudes,
+rangos e IDs antes de procesar o persistir. Para los archivos, la extensión
+no basta: se verifica el contenido PNG, se acota el tamaño y se genera el
+nombre en el servidor. Aceptar sólo PNG RGB/RGBA de 8 bits reduce los
+formatos admitidos y debe contemplarse al preparar las imágenes.
+
+Una prueba de datos inválidos debe usar un token válido para distinguir
+un **400 de validación** de un **403 por CSRF**. Comprobar también una
+reseña, un pedido y una imagen válidos permite verificar que los flujos
+legítimos siguen funcionando. Se distinguen las capturas, los resultados
+manuales sin captura y las pruebas automáticas para no atribuir a cada
+evidencia más alcance del que tiene.

@@ -1,0 +1,85 @@
+TAP version 13
+# Subtest: CSRF: visitantes y operaciones del panel
+    # Subtest: rechaza escrituras sin token y con token de otro visitante
+    ok 1 - rechaza escrituras sin token y con token de otro visitante
+      ---
+      duration_ms: 69.641099
+      type: 'test'
+      ...
+    # Subtest: rechaza el cambio de contraseña sin token antes de llegar a la ruta
+    ok 2 - rechaza el cambio de contraseña sin token antes de llegar a la ruta
+      ---
+      duration_ms: 2.9698
+      type: 'test'
+      ...
+    # Subtest: rechaza un login desde un origen ajeno antes de autenticar
+    ok 3 - rechaza un login desde un origen ajeno antes de autenticar
+      ---
+      duration_ms: 3.071
+      type: 'test'
+      ...
+    1..3
+ok 1 - CSRF: visitantes y operaciones del panel
+  ---
+  duration_ms: 76.945899
+  type: 'suite'
+  ...
+# Subtest: Subidas con sesión y token válidos
+    # Subtest: rechaza HTML y rutas manipuladas antes de escribir
+    ok 1 - rechaza HTML y rutas manipuladas antes de escribir
+      ---
+      duration_ms: 101.151899
+      type: 'test'
+      ...
+    # Subtest: acepta PNG válido con nombre aleatorio y sirve la imagen
+    ok 2 - acepta PNG válido con nombre aleatorio y sirve la imagen
+      ---
+      duration_ms: 21.694899
+      type: 'test'
+      ...
+    # Subtest: fuerza la descarga de HTML que ya estuviera en uploads
+    ok 3 - fuerza la descarga de HTML que ya estuviera en uploads
+      ---
+      duration_ms: 9.8774
+      type: 'test'
+      ...
+    1..3
+ok 2 - Subidas con sesión y token válidos
+  ---
+  duration_ms: 278.912797
+  type: 'suite'
+  ...
+# Subtest: Validación con token CSRF válido
+    # Subtest: rechaza cantidades inválidas sin escribir pedidos
+    ok 1 - rechaza cantidades inválidas sin escribir pedidos
+      ---
+      duration_ms: 52.3904
+      type: 'test'
+      ...
+    # Subtest: rechaza reseñas extensas y acepta una reseña normal
+    ok 2 - rechaza reseñas extensas y acepta una reseña normal
+      ---
+      duration_ms: 28.832199
+      type: 'test'
+      ...
+    # Subtest: acepta un pedido legítimo con token
+    ok 3 - acepta un pedido legítimo con token
+      ---
+      duration_ms: 51.0999
+      type: 'test'
+      ...
+    1..3
+ok 3 - Validación con token CSRF válido
+  ---
+  duration_ms: 236.489897
+  type: 'suite'
+  ...
+1..3
+# tests 9
+# suites 3
+# pass 9
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2260.472672

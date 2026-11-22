@@ -14,6 +14,14 @@
 **Proyecto:** Cafetería Origen · Node.js + TypeScript + Express + PostgreSQL 16 en Docker
 **Alcance:** aplicación web + API REST + panel de administración
 
+> **Lectura del estado:** este catálogo describe la línea de base vulnerable;
+> los ejemplos, números de línea y resultados originales no representan
+> necesariamente el código corregido. El estado de VUL-09 a VUL-12, las
+> evidencias antes/después y las dependencias de integración están en
+> [CSRF y validación de entrada](INFORME-SEGURIDAD.md#csrf-y-validación-de-entrada).
+> La implementación admite únicamente PNG RGB/RGBA de 8 bits; los formatos
+> de la mitigación de VUL-12 son ejemplos, no una lista obligatoria.
+
 ---
 
 ## Índice
@@ -310,9 +318,10 @@ contra una lista blanca antes de usarlo.
 | `DELETE /api/admin/productos/:id` | `routes/admin.routes.ts:101` | borrar producto |
 | `POST /api/admin/cambiar-contrasena` | `routes/admin.routes.ts:119` | cambiar contraseña |
 
-Ninguno pide un token. Además la cookie de sesión se emite **sin `SameSite`**
-(`middleware/sesion.ts:62`), así que el navegador la manda también desde otros
-sitios.
+En la línea de base, ninguno pedía un token. La cookie de sesión se emitía
+**sin un atributo `SameSite` explícito** (`middleware/sesion.ts:62`); el
+comportamiento ante peticiones entre sitios depende del navegador y del tipo
+de solicitud.
 
 **Cómo se observa (manual, local):** con el panel abierto y sesión iniciada, en
 otra pestaña abrir un `ataque.html` local que haga POST automático a
@@ -358,8 +367,10 @@ No se valida **tipo** (entero), **rango** (1..N), ni **longitud** de `mesa`,
 
 - `POST /api/pedidos` con `{"items":[{"productoId":4,"cantidad":-5}]}` →
   **total −28700** (un pedido que le *paga* a la cafetería).
-- `cantidad: "abc"` → el total queda `NaN` y se guarda como `NaN` en la base.
-- `cantidad: 999999` → factura absurda (DoS / abuso de recursos).
+- `cantidad: "abc"` → en la prueba manual previa, el servidor respondió 500
+  con un error de PostgreSQL; no se comprobó una escritura en la base.
+- `cantidad: 999999` → ejemplo de cantidad desmesurada que debe rechazarse
+  por rango (no se presenta como una prueba manual realizada).
 - Con el devtools, cambiar `type="number"` por `type="text"` en el formulario y
   mandar texto donde el navegador lo bloqueaba.
 
@@ -394,14 +405,16 @@ res.json({ url: `/uploads/${nombre}` });
 
 Tres problemas en tres líneas: **no valida extensión**, **no valida el tipo MIME
 real**, **no limita el tamaño**, y **el nombre lo decide el cliente** (con
-`../../` se puede escribir fuera de la carpeta). Y como los archivos se sirven
-con `express.static` **desde el mismo origen**, un `.html` subido es XSS
-almacenado servido por el propio sitio.
+`../../` se corre el riesgo de escribir fuera de la carpeta). Y como los
+archivos se servían con `express.static` **desde el mismo origen**, un `.html`
+subido podía convertirse en un vector de XSS almacenado.
 
 **Cómo se observa (manual, local):**
 
-1. Panel → Productos → Subir imagen → elegir un `.html` con `<script>alert(1)</script>`.
-2. Abrir la URL que devuelve → el script corre **en el dominio de la cafetería**.
+1. Panel → Productos → Subir imagen → elegir un HTML inocuo de prueba.
+2. Abrir la URL que devuelve → el contenido HTML se renderizaba desde el mismo
+   origen. No se probó la ejecución de scripts ni la escritura fuera de
+   `uploads/`; los resultados concretos se registran en el informe.
 
 **Cómo se mitiga:** lista blanca de extensiones (`.png`, `.jpg`, `.webp`),
 verificación del **magic number** del archivo, tamaño máximo, y **nombre generado

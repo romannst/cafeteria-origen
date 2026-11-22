@@ -1,6 +1,7 @@
 import express from 'express';
 import * as catalogo from '../services/catalogo.service';
 import type { FiltrosCatalogo } from '../services/catalogo.service';
+import { idValido } from '../validacion';
 
 const router = express.Router();
 
@@ -52,10 +53,10 @@ router.get('/:id', async (req, res, next) => {
   try {
     // Solo se aceptan ids enteros positivos: cualquier otra cosa
     // (por ejemplo un <script>) se rechaza antes de llegar a la base.
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id <= 0) {
+    if (!idValido(req.params.id)) {
       return res.status(404).json({ error: 'Producto no encontrado.' });
     }
+    const id = Number(req.params.id);
     const producto = await catalogo.obtener(id);
     if (!producto) {
       // Mensaje genérico: no se devuelve lo que mandó el usuario.
