@@ -36,27 +36,51 @@ type Id = number | string;
  * -----------------------------------------------------------------------------
  */
 
+const MAX_ITEMS = 50;
+const MAX_CANTIDAD = 100;
+const MAX_TEXTO_CORTO = 80;
+
 /**
  * Crea un pedido a partir de una lista de items { productoId, cantidad }.
  * Total = suma de calcularPrecio(producto) x cantidad
  */
 export async function crear({ mesa, cliente, items }: NuevoPedido): Promise<PedidoConItems | null> {
-  // La ruta valida el cuerpo antes de llamar al servicio; los tipos de
-  // TypeScript por sí solos no validan entradas HTTP.
+  if (!Array.isArray(items) || items.length === 0 || items.length > MAX_ITEMS) {
+    throw new Error('La lista de ítems es inválida o supera el máximo permitido.');
+  }
+
+  const mesaLimpia = typeof mesa === 'string' ? mesa.trim() : '';
+  const clienteLimpio = typeof cliente === 'string' ? cliente.trim() : '';
+
+  if (!mesaLimpia || mesaLimpia.length > MAX_TEXTO_CORTO) {
+    throw new Error('El identificador de mesa es inválido.');
+  }
+  if (!clienteLimpio || clienteLimpio.length > MAX_TEXTO_CORTO) {
+    throw new Error('El nombre de cliente es inválido.');
+  }
+
   const filas: { productoId: number; cantidad: number; precioUnitario: number }[] = [];
 
   for (const item of items) {
-    // Un producto inexistente se rechaza antes de insertar el pedido.
-    const producto = await buscarProducto(item.productoId);
-    if (!producto) {
-      const error = new Error('Producto no encontrado.') as Error & { status: number };
-      error.status = 400;
-      throw error;
+    const productoId = Number(item?.productoId);
+    const cantidad = Number(item?.cantidad);
+
+    if (!Number.isInteger(productoId) || productoId <= 0) {
+      throw new Error('El ID de producto es inválido.');
     }
+    if (!Number.isInteger(cantidad) || cantidad <= 0 || cantidad > MAX_CANTIDAD) {
+      throw new Error('La cantidad debe ser un entero positivo dentro del rango permitido.');
+    }
+
+    const producto = await buscarProducto(productoId);
+    if (!producto) {
+      throw new Error(`El producto ${productoId} no existe.`);
+    }
+
     const precioUnitario = calcularPrecio(producto);
     filas.push({
       productoId: producto.id,
-      cantidad: item.cantidad,
+      cantidad,
       precioUnitario,
     });
   }
@@ -70,7 +94,7 @@ export async function crear({ mesa, cliente, items }: NuevoPedido): Promise<Pedi
     `INSERT INTO pedidos (mesa, cliente, estado, total)
      VALUES ($1, $2, 'abierto', $3)
      RETURNING *`,
-    [mesa, cliente, total]
+    [mesaLimpia, clienteLimpio, total]
   );
   const pedido = rows[0];
 
@@ -93,12 +117,15 @@ async function buscarProducto(productoId: number): Promise<Producto> {
 
 /** Lista pedidos (con filtro opcional por mesa). */
 export async function listar(mesa?: string): Promise<Pedido[]> {
-  // FALLA: inyección SQL en el filtro de mesa.
+  const params: unknown[] = [];
   let sql = 'SELECT * FROM pedidos';
-  if (mesa) sql += ` WHERE mesa = '${mesa}'`;
+  if (mesa) {
+    params.push(mesa);
+    sql += ` WHERE mesa = $${params.length}`;
+  }
   sql += ' ORDER BY id DESC';
 
-  const { rows } = await db.query<Pedido>(sql);
+  const { rows } = await db.query<Pedido>(sql, params);
   return rows;
 }
 
