@@ -13,6 +13,8 @@ export interface NuevoPedido {
   mesa: string;
   cliente: string;
   items: ItemPedido[];
+  /** Sale de la sesión del servidor, nunca del cuerpo de la petición. */
+  usuarioId?: number | null;
 }
 
 /** Id tal como llega en la URL (texto) o ya convertido. */
@@ -36,51 +38,27 @@ type Id = number | string;
  * -----------------------------------------------------------------------------
  */
 
-const MAX_ITEMS = 50;
-const MAX_CANTIDAD = 100;
-const MAX_TEXTO_CORTO = 80;
-
 /**
  * Crea un pedido a partir de una lista de items { productoId, cantidad }.
  * Total = suma de calcularPrecio(producto) x cantidad
  */
-export async function crear({ mesa, cliente, items }: NuevoPedido): Promise<PedidoConItems | null> {
-  if (!Array.isArray(items) || items.length === 0 || items.length > MAX_ITEMS) {
-    throw new Error('La lista de ítems es inválida o supera el máximo permitido.');
-  }
-
-  const mesaLimpia = typeof mesa === 'string' ? mesa.trim() : '';
-  const clienteLimpio = typeof cliente === 'string' ? cliente.trim() : '';
-
-  if (!mesaLimpia || mesaLimpia.length > MAX_TEXTO_CORTO) {
-    throw new Error('El identificador de mesa es inválido.');
-  }
-  if (!clienteLimpio || clienteLimpio.length > MAX_TEXTO_CORTO) {
-    throw new Error('El nombre de cliente es inválido.');
-  }
-
+export async function crear({ mesa, cliente, items, usuarioId = null }: NuevoPedido): Promise<PedidoConItems | null> {
+  // La ruta valida el cuerpo antes de llamar al servicio; los tipos de
+  // TypeScript por sí solos no validan entradas HTTP.
   const filas: { productoId: number; cantidad: number; precioUnitario: number }[] = [];
 
   for (const item of items) {
-    const productoId = Number(item?.productoId);
-    const cantidad = Number(item?.cantidad);
-
-    if (!Number.isInteger(productoId) || productoId <= 0) {
-      throw new Error('El ID de producto es inválido.');
-    }
-    if (!Number.isInteger(cantidad) || cantidad <= 0 || cantidad > MAX_CANTIDAD) {
-      throw new Error('La cantidad debe ser un entero positivo dentro del rango permitido.');
-    }
-
-    const producto = await buscarProducto(productoId);
+    // Un producto inexistente se rechaza antes de insertar el pedido.
+    const producto = await buscarProducto(item.productoId);
     if (!producto) {
-      throw new Error(`El producto ${productoId} no existe.`);
+      const error = new Error('Producto no encontrado.') as Error & { status: number };
+      error.status = 400;
+      throw error;
     }
-
     const precioUnitario = calcularPrecio(producto);
     filas.push({
       productoId: producto.id,
-      cantidad,
+      cantidad: item.cantidad,
       precioUnitario,
     });
   }
@@ -91,10 +69,10 @@ export async function crear({ mesa, cliente, items }: NuevoPedido): Promise<Pedi
   );
 
   const { rows } = await db.query<Pedido>(
-    `INSERT INTO pedidos (mesa, cliente, estado, total)
-     VALUES ($1, $2, 'abierto', $3)
+    `INSERT INTO pedidos (mesa, cliente, estado, total, usuario_id)
+     VALUES ($1, $2, 'abierto', $3, $4)
      RETURNING *`,
-    [mesaLimpia, clienteLimpio, total]
+    [mesa, cliente, total, usuarioId]
   );
   const pedido = rows[0];
 
@@ -117,15 +95,24 @@ async function buscarProducto(productoId: number): Promise<Producto> {
 
 /** Lista pedidos (con filtro opcional por mesa). */
 export async function listar(mesa?: string): Promise<Pedido[]> {
-  const params: unknown[] = [];
-  let sql = 'SELECT * FROM pedidos';
-  if (mesa) {
-    params.push(mesa);
-    sql += ` WHERE mesa = $${params.length}`;
-  }
-  sql += ' ORDER BY id DESC';
+  // La mesa viaja como parámetro ($1): nunca forma parte del texto SQL.
+  const { rows } = await db.query<Pedido>(
+    `SELECT * FROM pedidos
+      WHERE ($1::text IS NULL OR mesa = $1)
+      ORDER BY id DESC`,
+    [mesa || null]
+  );
+  return rows;
+}
 
-  const { rows } = await db.query<Pedido>(sql, params);
+/** Pedidos de un usuario, con filtro opcional por mesa (parametrizada). */
+export async function listarDeUsuario(usuarioId: number, mesa?: string): Promise<Pedido[]> {
+  const { rows } = await db.query<Pedido>(
+    `SELECT * FROM pedidos
+      WHERE usuario_id = $1 AND ($2::text IS NULL OR mesa = $2)
+      ORDER BY id DESC`,
+    [usuarioId, mesa || null]
+  );
   return rows;
 }
 
