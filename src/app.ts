@@ -10,6 +10,7 @@ import reportesRoutes from './routes/reportes.routes';
 import comentariosRoutes from './routes/comentarios.routes';
 import adminRoutes from './routes/admin.routes';
 import debugRoutes from './routes/debug.routes';
+import { obtenerToken, protegerCsrf } from './middleware/csrf';
 
 const app = express();
 
@@ -23,11 +24,22 @@ const app = express();
  *  - política de CORS restringida al propio origen
  *  - helmet CSP además sirve como capa extra frente al XSS
  */
+app.use('/api/admin/subir-archivo', express.json({ limit: '3mb' }));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Archivos subidos por el panel de administración.
-app.use('/uploads', express.static(config.uploadsDir));
+app.use('/uploads', express.static(config.uploadsDir, {
+  setHeaders(res, archivo) {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', 'sandbox');
+    // Los archivos HTML de las demostraciones anteriores permanecen, pero
+    // ya no deben renderizarse como páginas del mismo origen.
+    if (path.extname(archivo).toLowerCase() !== '.png') {
+      res.setHeader('Content-Disposition', 'attachment');
+    }
+  },
+}));
 
 // Sitio web estático
 app.use(express.static(path.join(__dirname, 'public')));
@@ -36,6 +48,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('/api/salud', (req, res) => {
   res.json({ ok: true, servicio: 'cafeteria-origen', hora: new Date().toISOString() });
 });
+
+app.get('/api/csrf-token', obtenerToken);
+app.use('/api', protegerCsrf);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/productos', productosRoutes);

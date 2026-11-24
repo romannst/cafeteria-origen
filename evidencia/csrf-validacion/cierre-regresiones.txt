@@ -1,0 +1,133 @@
+TAP version 13
+# Subtest: CSRF: visitantes y operaciones del panel
+    # Subtest: rechaza escrituras sin token y con token de otro visitante
+    ok 1 - rechaza escrituras sin token y con token de otro visitante
+      ---
+      duration_ms: 108.785101
+      type: 'test'
+      ...
+    # Subtest: rechaza el cambio de contrase├▒a sin token antes de llegar a la ruta
+    ok 2 - rechaza el cambio de contrase├▒a sin token antes de llegar a la ruta
+      ---
+      duration_ms: 3.481
+      type: 'test'
+      ...
+    # Subtest: rechaza un login desde un origen ajeno antes de autenticar
+    ok 3 - rechaza un login desde un origen ajeno antes de autenticar
+      ---
+      duration_ms: 8.1525
+      type: 'test'
+      ...
+    # Subtest: exige token en login y rechaza tokens malformados sin error interno
+    ok 4 - exige token en login y rechaza tokens malformados sin error interno
+      ---
+      duration_ms: 20.5122
+      type: 'test'
+      ...
+    # Subtest: el formulario de login del panel solicita y env├¡a el token
+    ok 5 - el formulario de login del panel solicita y env├¡a el token
+      ---
+      duration_ms: 11.7129
+      type: 'test'
+      ...
+    1..5
+ok 1 - CSRF: visitantes y operaciones del panel
+  ---
+  duration_ms: 154.110301
+  type: 'suite'
+  ...
+# Subtest: Subidas con sesi├│n y token v├ílidos
+    # Subtest: rechaza HTML y rutas manipuladas antes de escribir
+    ok 1 - rechaza HTML y rutas manipuladas antes de escribir
+      ---
+      duration_ms: 267.013702
+      type: 'test'
+      ...
+    # Subtest: separa el token an├│nimo del autenticado y valida IDs del panel
+    ok 2 - separa el token an├│nimo del autenticado y valida IDs del panel
+      ---
+      duration_ms: 169.653502
+      type: 'test'
+      ...
+    # Subtest: acepta PNG v├ílido con nombre aleatorio y sirve la imagen
+    ok 3 - acepta PNG v├ílido con nombre aleatorio y sirve la imagen
+      ---
+      duration_ms: 24.1089
+      type: 'test'
+      ...
+    # Subtest: rechaza contenido disfrazado, base64 inv├ílido y PNG corrupto
+    ok 4 - rechaza contenido disfrazado, base64 inv├ílido y PNG corrupto
+      ---
+      duration_ms: 42.5701
+      type: 'test'
+      ...
+    # Subtest: fuerza la descarga de HTML que ya estuviera en uploads
+    ok 5 - fuerza la descarga de HTML que ya estuviera en uploads
+      ---
+      duration_ms: 12.3583
+      type: 'test'
+      ...
+    1..5
+ok 2 - Subidas con sesi├│n y token v├ílidos
+  ---
+  duration_ms: 829.247008
+  type: 'suite'
+  ...
+# Subtest: Validaci├│n con token CSRF v├ílido
+    # Subtest: rechaza cantidades inv├ílidas sin escribir pedidos
+    ok 1 - rechaza cantidades inv├ílidas sin escribir pedidos
+      ---
+      duration_ms: 59.5415
+      type: 'test'
+      ...
+    # Subtest: rechaza rese├▒as extensas y acepta una rese├▒a normal
+    ok 2 - rechaza rese├▒as extensas y acepta una rese├▒a normal
+      ---
+      duration_ms: 34.2825
+      type: 'test'
+      ...
+    # Subtest: acepta un pedido leg├¡timo con token
+    ok 3 - acepta un pedido leg├¡timo con token
+      ---
+      duration_ms: 51.026901
+      type: 'test'
+      ...
+    # Subtest: rechaza IDs de ruta inv├ílidos antes de consultar la base
+    ok 4 - rechaza IDs de ruta inv├ílidos antes de consultar la base
+      ---
+      duration_ms: 84.634101
+      type: 'test'
+      ...
+    # Subtest: rechaza campos fuera de l├¡mites sin persistir pedidos
+    ok 5 - rechaza campos fuera de l├¡mites sin persistir pedidos
+      ---
+      duration_ms: 58.3665
+      type: 'test'
+      ...
+    # Subtest: valida longitudes, tipos y rango de rese├▒as
+    ok 6 - valida longitudes, tipos y rango de rese├▒as
+      ---
+      duration_ms: 88.406601
+      type: 'test'
+      ...
+    # Subtest: rechaza estados inv├ílidos sin alterar el pedido y acepta la lista permitida
+    ok 7 - rechaza estados inv├ílidos sin alterar el pedido y acepta la lista permitida
+      ---
+      duration_ms: 249.235402
+      type: 'test'
+      ...
+    1..7
+ok 3 - Validaci├│n con token CSRF v├ílido
+  ---
+  duration_ms: 768.643607
+  type: 'suite'
+  ...
+1..3
+# tests 17
+# suites 3
+# pass 17
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 6075.639855

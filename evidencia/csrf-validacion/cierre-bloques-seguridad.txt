@@ -1,0 +1,54 @@
+TAP version 13
+# Subtest: Seguridad ┬À CSRF
+    # Subtest: existe un token anti-CSRF y las peticiones sin token se rechazan
+    ok 1 - existe un token anti-CSRF y las peticiones sin token se rechazan
+      ---
+      duration_ms: 137.625696
+      type: 'test'
+      ...
+    1..1
+ok 1 - Seguridad ┬À CSRF
+  ---
+  duration_ms: 220.771893
+  type: 'suite'
+  ...
+# Subtest: Seguridad ┬À Validaci├│n de entrada
+    # Subtest: no se aceptan cantidades negativas
+    ok 1 - no se aceptan cantidades negativas
+      ---
+      duration_ms: 10.993
+      type: 'test'
+      ...
+    # Subtest: no se aceptan cantidades no num├®ricas
+    ok 2 - no se aceptan cantidades no num├®ricas
+      ---
+      duration_ms: 9.2541
+      type: 'test'
+      ...
+    # Subtest: no se aceptan rese├▒as sin l├¡mite de longitud
+    ok 3 - no se aceptan rese├▒as sin l├¡mite de longitud
+      ---
+      duration_ms: 6.836699
+      type: 'test'
+      ...
+    # Subtest: no se aceptan archivos ejecutables ni se escribe fuera de uploads
+    ok 4 - no se aceptan archivos ejecutables ni se escribe fuera de uploads
+      ---
+      duration_ms: 53.602499
+      type: 'test'
+      ...
+    1..4
+ok 2 - Seguridad ┬À Validaci├│n de entrada
+  ---
+  duration_ms: 150.554895
+  type: 'suite'
+  ...
+1..2
+# tests 5
+# suites 2
+# pass 5
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1143.605965

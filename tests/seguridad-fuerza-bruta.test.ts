@@ -16,9 +16,8 @@
 
 import { test, before, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import request from 'supertest';
 
-import { app, prepararBase, crearUsuarioDePrueba, limpiarDatosDePrueba } from './helpers';
+import { agente, login, prepararBase, crearUsuarioDePrueba, limpiarDatosDePrueba } from './helpers';
 
 describe('Seguridad · Fuerza bruta', () => {
   before(async () => {
@@ -38,9 +37,8 @@ describe('Seguridad · Fuerza bruta', () => {
     let statusBloqueo = null;
 
     for (let i = 0; i < INTENTOS; i++) {
-      const res = await request(app)
-        .post('/api/auth/login')
-        .send({ username: 'sec_brute', password: `intento-fallido-${i}` });
+      const res = await login(agente(), 'sec_brute', `intento-fallido-${i}`);
+      assert.ok(!/CSRF/.test(res.body.error || ''), 'CSRF no debe simular un bloqueo por intentos.');
 
       if (res.status !== 401) {
         bloqueado = true;
@@ -61,9 +59,7 @@ describe('Seguridad · Fuerza bruta', () => {
   });
 
   test('el login correcto sigue funcionando después de un bloqueo', async () => {
-    const res = await request(app)
-      .post('/api/auth/login')
-      .send({ username: 'sec_brute', password: 'Sec_Clave_2024!' });
+    const res = await login(agente(), 'sec_brute', 'Sec_Clave_2024!');
 
     assert.ok(
       res.status === 200 || res.status === 429 || res.status === 403 || res.status === 423,

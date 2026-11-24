@@ -16,10 +16,8 @@
 
 import { test, before, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import request from 'supertest';
 
 import {
-  app,
   agente,
   prepararBase,
   login,
@@ -40,12 +38,10 @@ describe('Seguridad · Login', () => {
   test('los mensajes de login son genéricos (sin enumeración de usuarios)', async () => {
     await crearUsuarioDePrueba('sec_enum', 'Sec_Clave_2024!', 'barista');
 
-    const inexistente = await request(app)
-      .post('/api/auth/login')
-      .send({ username: 'usuario-que-no-existe-xyz', password: 'x' });
-    const contraseñaIncorrecta = await request(app)
-      .post('/api/auth/login')
-      .send({ username: 'sec_enum', password: 'contraseña-equivocada' });
+    const inexistente = await login(agente(), 'usuario-que-no-existe-xyz', 'x');
+    const contraseñaIncorrecta = await login(agente(), 'sec_enum', 'contraseña-equivocada');
+    assert.equal(inexistente.status, 401);
+    assert.equal(contraseñaIncorrecta.status, 401);
 
     assert.equal(
       inexistente.body.error,

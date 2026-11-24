@@ -1,0 +1,217 @@
+
+> cafeteria-origen@1.0.0 test
+> node --import tsx --test --test-concurrency=1 tests/productos.test.ts tests/pedidos.test.ts tests/auth.test.ts tests/reportes.test.ts
+
+TAP version 13
+# Subtest: Autenticaci├│n
+    # Subtest: el login con credenciales v├ílidas devuelve la sesi├│n
+    ok 1 - el login con credenciales v├ílidas devuelve la sesi├│n
+      ---
+      duration_ms: 64.254898
+      type: 'test'
+      ...
+    # Subtest: GET /api/auth/yo devuelve el usuario de la sesi├│n
+    ok 2 - GET /api/auth/yo devuelve el usuario de la sesi├│n
+      ---
+      duration_ms: 44.007298
+      type: 'test'
+      ...
+    # Subtest: un password incorrecto es rechazado
+    ok 3 - un password incorrecto es rechazado
+      ---
+      duration_ms: 63.789098
+      type: 'test'
+      ...
+    # Subtest: un usuario inexistente es rechazado
+    ok 4 - un usuario inexistente es rechazado
+      ---
+      duration_ms: 6.1078
+      type: 'test'
+      ...
+    # Subtest: sin sesi├│n, /api/auth/yo responde 401
+    ok 5 - sin sesi├│n, /api/auth/yo responde 401
+      ---
+      duration_ms: 4.0129
+      type: 'test'
+      ...
+    # Subtest: el logout responde 200
+    ok 6 - el logout responde 200
+      ---
+      duration_ms: 40.916099
+      type: 'test'
+      ...
+    1..6
+ok 1 - Autenticaci├│n
+  ---
+  duration_ms: 322.60419
+  type: 'suite'
+  ...
+# Subtest: Pedidos
+    # Subtest: POST /api/pedidos calcula el total del pedido
+    ok 1 - POST /api/pedidos calcula el total del pedido
+      ---
+      duration_ms: 112.721497
+      type: 'test'
+      ...
+    # Subtest: el total es la suma de calcularPrecio() por cantidad
+    ok 2 - el total es la suma de calcularPrecio() por cantidad
+      ---
+      duration_ms: 56.380198
+      type: 'test'
+      ...
+    # Subtest: GET /api/pedidos lista los pedidos de todas las mesas
+    ok 3 - GET /api/pedidos lista los pedidos de todas las mesas
+      ---
+      duration_ms: 7.8823
+      type: 'test'
+      ...
+    # Subtest: GET /api/pedidos/:id devuelve el pedido con sus items
+    ok 4 - GET /api/pedidos/:id devuelve el pedido con sus items
+      ---
+      duration_ms: 75.283297
+      type: 'test'
+      ...
+    # Subtest: el estado de un pedido se puede actualizar
+    ok 5 - el estado de un pedido se puede actualizar
+      ---
+      duration_ms: 85.537498
+      type: 'test'
+      ...
+    1..5
+ok 2 - Pedidos
+  ---
+  duration_ms: 451.663285
+  type: 'suite'
+  ...
+# Subtest: Cat├ílogo de productos
+    # Subtest: GET /api/productos devuelve el cat├ílogo completo
+    ok 1 - GET /api/productos devuelve el cat├ílogo completo
+      ---
+      duration_ms: 22.219399
+      type: 'test'
+      ...
+    # Subtest: el cat├ílogo incluye caf├® de los tres or├¡genes y pasteler├¡a
+    ok 2 - el cat├ílogo incluye caf├® de los tres or├¡genes y pasteler├¡a
+      ---
+      duration_ms: 6.1045
+      type: 'test'
+      ...
+    # Subtest: GET /api/productos?tipo=espresso devuelve los 9 espressos
+    ok 3 - GET /api/productos?tipo=espresso devuelve los 9 espressos
+      ---
+      duration_ms: 10.218399
+      type: 'test'
+      ...
+    # Subtest: GET /api/productos?tipo=pasteleria devuelve 2 productos
+    ok 4 - GET /api/productos?tipo=pasteleria devuelve 2 productos
+      ---
+      duration_ms: 4.5498
+      type: 'test'
+      ...
+    # Subtest: GET /api/productos?variedad=Colombia filtra por origen
+    ok 5 - GET /api/productos?variedad=Colombia filtra por origen
+      ---
+      duration_ms: 5.6062
+      type: 'test'
+      ...
+    # Subtest: el precio final se calcula como costo del caf├® + precio base
+    ok 6 - el precio final se calcula como costo del caf├® + precio base
+      ---
+      duration_ms: 6.2675
+      type: 'test'
+      ...
+    # Subtest: los precios del parcial se respetan en todo el cat├ílogo
+    ok 7 - los precios del parcial se respetan en todo el cat├ílogo
+      ---
+      duration_ms: 5.1293
+      type: 'test'
+      ...
+    # Subtest: GET /api/productos/:id devuelve un producto
+    ok 8 - GET /api/productos/:id devuelve un producto
+      ---
+      duration_ms: 10.568899
+      type: 'test'
+      ...
+    # Subtest: GET /api/productos/:id inexistente devuelve 404
+    ok 9 - GET /api/productos/:id inexistente devuelve 404
+      ---
+      duration_ms: 5.7133
+      type: 'test'
+      ...
+    1..9
+ok 3 - Cat├ílogo de productos
+  ---
+  duration_ms: 149.053195
+  type: 'suite'
+  ...
+# Subtest: Reportes
+    # Subtest: GET /api/reportes/facturacion devuelve el total facturado
+    ok 1 - GET /api/reportes/facturacion devuelve el total facturado
+      ---
+      duration_ms: 21.2264
+      type: 'test'
+      ...
+    # Subtest: la facturaci├│n crece al crear un pedido
+    ok 2 - la facturaci├│n crece al crear un pedido
+      ---
+      duration_ms: 94.406797
+      type: 'test'
+      ...
+    # Subtest: GET /api/reportes/cantidad-vendida agrupa por tipo
+    ok 3 - GET /api/reportes/cantidad-vendida agrupa por tipo
+      ---
+      duration_ms: 5.8105
+      type: 'test'
+      ...
+    # Subtest: GET /api/reportes/mas-vendido devuelve el producto m├ís vendido
+    ok 4 - GET /api/reportes/mas-vendido devuelve el producto m├ís vendido
+      ---
+      duration_ms: 7.605499
+      type: 'test'
+      ...
+    # Subtest: GET /api/reportes/ventas-por-variedad filtra por origen
+    ok 5 - GET /api/reportes/ventas-por-variedad filtra por origen
+      ---
+      duration_ms: 8.853
+      type: 'test'
+      ...
+    1..5
+ok 4 - Reportes
+  ---
+  duration_ms: 179.119494
+  type: 'suite'
+  ...
+# Subtest: Sitio web
+    # Subtest: la p├ígina principal se sirve
+    ok 1 - la p├ígina principal se sirve
+      ---
+      duration_ms: 38.110899
+      type: 'test'
+      ...
+    # Subtest: el panel de administraci├│n se sirve
+    ok 2 - el panel de administraci├│n se sirve
+      ---
+      duration_ms: 9.5546
+      type: 'test'
+      ...
+    # Subtest: GET /api/salud responde ok
+    ok 3 - GET /api/salud responde ok
+      ---
+      duration_ms: 7.262299
+      type: 'test'
+      ...
+    1..3
+ok 5 - Sitio web
+  ---
+  duration_ms: 55.551298
+  type: 'suite'
+  ...
+1..5
+# tests 28
+# suites 5
+# pass 28
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3717.255484

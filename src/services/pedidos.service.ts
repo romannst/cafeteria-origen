@@ -22,17 +22,17 @@ type Id = number | string;
  * Servicio de pedidos.
  *
  * -----------------------------------------------------------------------------
- * FALLA — Validación de entrada débil o insuficiente (OWASP A04:2021)
+ * Línea de base: validación insuficiente (OWASP A04:2021)
  * -----------------------------------------------------------------------------
- * No se valida nada de lo que llega en el cuerpo de la petición:
+ * Anteriormente no se validaba lo que llegaba en el cuerpo de la petición:
  *  - `cantidad` puede ser negativa (el total del pedido queda negativo),
  *    cero, un número decimal o un texto.
  *  - No hay un máximo de items ni de cantidad (DoS / facturas absurdas).
  *  - `mesa` y `cliente` no se validan ni se acotan en longitud.
  *  - Si el productoId no existe, la excepción sube y se filtra el stack.
  *
- * La corrección es validar TIPO (entero), RANGO (1..N), LONGITUD y FORMATO
- * de cada campo en el servidor, usando listas blancas.
+ * Las peticiones HTTP ahora se validan en pedidos.routes.ts antes de llamar a
+ * este servicio. Coordinar cualquier cambio de consultas con el bloque SQLi.
  * -----------------------------------------------------------------------------
  */
 
