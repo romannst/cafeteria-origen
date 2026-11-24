@@ -63,6 +63,64 @@ eludir controles de acceso, alterar filtros o leer información de otras tablas)
 
 ---
 
+### VUL-02 · Inyección SQL en los filtros del catálogo
+
+* **Dónde:** `src/services/catalogo.service.ts` (líneas 40–43 y también en `obtener(id)`).
+
+* **Código vulnerable:**
+
+  ```ts
+  if (tipo) sql += ` AND tipo = '${tipo}'`;
+  if (variedad) sql += ` AND variedad = '${variedad}'`;
+  if (q) sql += ` AND (nombre ILIKE '%${q}%' OR descripcion ILIKE '%${q}%')`;
+  ```
+
+* **Cómo se observó:** en el buscador del menú se escribió `q = ' OR '1'='1` (o
+  `' OR 1=1 --`) y la API devolvió los 20 productos del catálogo completo en
+  lugar de acotar los resultados.
+
+* **Por qué ocurre:** los parámetros `tipo`, `variedad` y `q` (además de `id`
+  en `obtener`) se concatenan directamente en el SQL dinámico sin escapar ni
+  parametrizar.
+
+* **Corrección:** construir la consulta de forma parametrizada (`$1`, `$2`, …)
+  acumulando las condiciones y enviando los valores en un arreglo de parámetros
+  separado de la sentencia SQL, y parametrizar/validar también el `id` en
+  `obtener`:
+
+  ```ts
+  const condiciones: string[] = ['activo = true'];
+  const params: unknown[] = [];
+
+  if (tipo) {
+    params.push(tipo);
+    condiciones.push(`tipo = $${params.length}`);
+  }
+  if (variedad) {
+    params.push(variedad);
+    condiciones.push(`variedad = $${params.length}`);
+  }
+  if (q) {
+    params.push(`%${q}%`);
+    condiciones.push(`(nombre ILIKE $${params.length} OR descripcion ILIKE $${params.length})`);
+  }
+
+  const sql = `SELECT * FROM productos WHERE ${condiciones.join(' AND ')} ORDER BY tipo, variedad NULLS FIRST, id`;
+  const { rows } = await db.query<Producto>(sql, params);
+  ```
+
+* **Verificación manual:** al buscar `' OR '1'='1` en el catálogo, el motor lo
+  evalúa como texto literal dentro de `ILIKE` y devuelve 0 coincidencias sin
+  alterar la consulta.
+
+* **Observación:** esta falla también provocaba que payloads de XSS con
+  comillas simples (como `alert('XSS')` en VUL-05) rompieran la sintaxis SQL y
+  expusieran errores de PostgreSQL antes de llegar al frontend. Asimismo, se
+  corrigió la concatenación directa en `obtener(id)` parametrizando el `id` y
+  validando que sea un entero positivo.
+
+---
+
 ## Cross-Site Scripting (XSS)
 
 **Responsable:** Castellini, Nicolás (Integrante 2)
