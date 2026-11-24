@@ -11,6 +11,58 @@ La evidencia de los tests (salida real, antes y después) está en
 
 ---
 
+## Inyección SQL (SQL Injection)
+
+**Responsable:** Ramos, Nikolás (Integrante 1)
+**Fallas:** VUL-01 · **OWASP:** A03:2021 — Injection
+
+### Qué es y por qué importa
+
+La inyección SQL ocurre cuando datos que controla un usuario se concatenan
+directamente en la cadena de una consulta SQL en lugar de enviarse como
+parámetros separados. El motor de base de datos (PostgreSQL) no distingue si
+las comillas o los operadores los escribió el desarrollador o un atacante: si
+forman parte de la consulta, se interpretan como instrucciones SQL (permitiendo
+eludir controles de acceso, alterar filtros o leer información de otras tablas).
+
+---
+
+### VUL-01 · Inyección SQL en el login
+
+- **Dónde:** `src/services/usuarios.service.ts` (línea 42).
+- **Código vulnerable:**
+
+  ```js
+  const sql = `SELECT * FROM usuarios WHERE username = '${username}' AND password = '${password}'`;
+  const { rows } = await db.query(sql);
+  ```
+
+- **Cómo se observó:** en el formulario de login del panel se ingresó el
+  usuario `' OR 1=1 --` con cualquier contraseña y el sistema permitió ingresar
+  como `admin`. También se verificó con `admin'--` para acceder sin contraseña.
+- **Por qué ocurre:** `username` y `password` se concatenan directamente al
+  texto SQL, permitiendo que las comillas cierren la cadena y modifiquen la
+  lógica del `WHERE`.
+- **Corrección:** se parametrizan las consultas con marcadores posicionales
+  (`$1`) y se verifica la contraseña mediante hashing (`bcrypt.compare`) en
+  lugar de compararla en texto plano:
+
+  ```js
+  const { rows } = await db.query('SELECT * FROM usuarios WHERE username = $1', [username]);
+  const usuario = rows[0];
+  if (!usuario) return null;
+  const coincide = await bcrypt.compare(password, usuario.password);
+  return coincide ? usuario : null;
+  ```
+
+- **Verificación manual:** los payloads de bypass en el login dejan de
+  autenticar sin credenciales válidas y se tratan como cadenas literales.
+- **Decisiones:** parametrizar la consulta debe ir acompañado de `bcrypt.compare`
+  (control **AUTH-03**), ya que mantener contraseñas en texto plano en la base
+  de datos (VUL-13) sigue exponiendo las cuentas ante cualquier filtración.
+
+---
+
 ## Cross-Site Scripting (XSS)
 
 **Responsable:** Castellini, Nicolás (Integrante 2)
