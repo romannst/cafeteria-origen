@@ -39,4 +39,5 @@ export default {
   },
 
   uploadsDir: process.env.UPLOADS_DIR || path.join(__dirname, '..', 'uploads'),
+  enableDebugRoutes: process.env.ENABLE_DEBUG_ROUTES === 'true',
 };
