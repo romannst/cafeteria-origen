@@ -14,7 +14,7 @@ La evidencia de los tests (salida real, antes y después) está en
 ## Inyección SQL (SQL Injection)
 
 **Responsable:** Ramos, Nikolás (Integrante 1)
-**Fallas:** VUL-01 · **OWASP:** A03:2021 — Injection
+**Fallas:** VUL-01, VUL-02, VUL-03, VUL-04 · **OWASP:** A03:2021 — Injection
 
 ### Qué es y por qué importa
 
@@ -24,6 +24,22 @@ parámetros separados. El motor de base de datos (PostgreSQL) no distingue si
 las comillas o los operadores los escribió el desarrollador o un atacante: si
 forman parte de la consulta, se interpretan como instrucciones SQL (permitiendo
 eludir controles de acceso, alterar filtros o leer información de otras tablas).
+
+En el proyecto aparecían distintos vectores de inyección:
+
+| Tipo | Cómo se explota en la aplicación | 
+| ----- | ----- | 
+| **Bypass de autenticación** | Alterar la condición `WHERE` en el login para ingresar sin conocer la contraseña. | 
+| **Inyección en filtros dinámicos** | Manipular cláusulas `AND` o `WHERE` para ampliar los resultados devueltos. | 
+| **Inyección basada en `UNION`** | Anexar consultas sobre otras tablas (`usuarios`) para exfiltrar datos sensibles. | 
+
+### Causa común
+
+En las capas de servicio del proyecto (`usuarios.service.ts`,
+`catalogo.service.ts`, `pedidos.service.ts` y `reportes.service.ts`) se
+construían las sentencias SQL concatenando variables de entrada mediante
+template strings (`${...}`), confiando en que los valores recibidos no
+contendrían caracteres especiales de SQL.
 
 ---
 
@@ -157,6 +173,100 @@ eludir controles de acceso, alterar filtros o leer información de otras tablas)
 * **Verificación manual:** la petición con `' OR '1'='1` ya no amplía el
   resultado y devuelve una lista vacía al no existir una mesa con ese nombre
   literal.
+
+---
+
+### VUL-04 · Inyección SQL vía `UNION` en reporte de ventas por origen
+
+* **Dónde:** `src/services/reportes.service.ts` (`ventasPorVariedad`).
+
+* **Código vulnerable:**
+
+  ```ts
+  const sql = `
+    SELECT pr.variedad, pr.nombre, SUM(pi.cantidad) AS unidades,
+           SUM(pi.cantidad * pi.precio_unitario) AS total
+      FROM pedido_items pi
+      JOIN productos pr ON pr.id = pi.producto_id
+     GROUP BY pr.variedad, pr.nombre
+    HAVING pr.variedad = '${variedad}'`;
+
+  const { rows } = await db.query<VentaPorVariedad>(sql);
+
+* **Cómo se observó:** al consultar
+  `GET /api/reportes/ventas-por-variedad?variedad=Brasil' UNION SELECT username, password, 1, 1 FROM usuarios--`
+  el reporte anexaba los registros de la tabla `usuarios`, exponiendo nombres
+  de usuario y contraseñas en texto plano.
+
+* **Por qué ocurre:** el parámetro `variedad` se concatena directamente en la
+  consulta de reporte, permitiendo cerrar la cadena e inyectar una sentencia
+  `UNION SELECT` sobre otras tablas de la base.
+
+* **Corrección:** parametrizar la consulta (`WHERE pr.variedad = $1`) y
+  validar previamente el parámetro contra una **lista blanca** de orígenes
+  permitidos (`Brasil`, `Colombia`, `Etiopía`):
+
+  ```ts
+  const VARIEDADES_PERMITIDAS = ['Brasil', 'Colombia', 'Etiopía'];
+
+  if (!VARIEDADES_PERMITIDAS.includes(variedad)) {
+    throw new Error('Variedad no válida.');
+  }
+
+  const sql = `
+    SELECT pr.nombre, pr.variedad, SUM(ip.cantidad) AS unidades, SUM(ip.subtotal) AS total
+    FROM items_pedido ip
+    JOIN productos pr ON pr.id = ip.producto_id
+    WHERE pr.variedad = $1
+    GROUP BY pr.id, pr.nombre, pr.variedad
+    ORDER BY total DESC
+  `;
+  const { rows } = await db.query(sql, [variedad]);
+  ```
+
+* **Decisiones:** combinar la consulta parametrizada con validación por lista
+  blanca aplica **defensa en profundidad**, rechazando valores fuera de dominio
+  antes de consultar la base de datos.
+
+* **Verificación manual:** el payload con `UNION SELECT` es rechazado por la
+  validación de entrada y no expone datos de otras tablas.
+
+---
+
+### Verificación
+
+| Prueba / Verificación | Antes | Después |
+| :--- | :---: | :---: |
+| `el login NO acepta el bypass con payload SQL` (VUL-01) | ✘ | ✔ |
+| `el login NO acepta el payload que comenta la contraseña` (VUL-01) | ✘ | ✔ |
+| `la búsqueda del catálogo NO se puede ampliar con SQL` (VUL-02) | ✘ | ✔ |
+| `el filtro por origen NO se puede ampliar con SQL` (VUL-02) | ✘ | ✔ |
+| `el filtro por mesa NO se puede ampliar con SQL` (VUL-03) | ✘ | ✔ |
+| `el reporte por origen NO filtra otras tablas con UNION` (VUL-04) | ✘ | ✔ |
+| `la aplicación NO se conecta con un superusuario de la base` | ✘ | ✘ *(configuración de conexión/usuario BD, fuera de servicios SQLi)* |
+
+Comando usado para ejecutar las pruebas de seguridad:
+
+```bash
+npm run test:seguridad
+```
+
+*(O en contenedor: `docker compose exec app npm run test:seguridad`)*
+
+Pruebas manuales realizadas (sin alterar datos sensibles ni exfiltrar información):
+
+* **Login (`VUL-01`):** payloads como `' OR 1=1 --` y `admin'--` ya no permiten ingresar sin credenciales válidas.
+* **Catálogo (`VUL-02`):** búsqueda con `q = ' OR '1'='1` y filtro `variedad = Colombia' OR '1'='1` no amplían resultados fuera del filtro ni rompen la consulta.
+* **Pedidos (`VUL-03`):** consulta `GET /api/pedidos?mesa=' OR '1'='1` no devuelve pedidos de todas las mesas y las validaciones de entrada en `crear` rechazan datos inválidos.
+* **Reportes (`VUL-04`):** consulta `GET /api/reportes/ventas-por-variedad?variedad=Brasil' UNION SELECT username, password, 1, 1 FROM usuarios--` no expone datos de `usuarios` y respeta la lista blanca + parametrización.
+
+---
+
+### Reflexión
+
+El origen de estas fallas era armar sentencias SQL concatenando strings con datos de entrada (`${...}`), tratando valores externos como parte de la sintaxis de la consulta en lugar de pasarlos como parámetros vinculados.
+
+En una aplicación real, el estándar por defecto debe ser **siempre consultas parametrizadas** (`$1`, `$2`, …) y validación estricta de entradas (tipos, rangos, longitudes y listas blancas cuando el dominio es cerrado), dejando la construcción dinámica de identificadores o cláusulas fuera del alcance de la entrada del usuario. Combinar parametrización, validación en servidor y hashing de contraseñas reduce drásticamente el impacto de cualquier entrada maliciosa.
 
 ---
 
