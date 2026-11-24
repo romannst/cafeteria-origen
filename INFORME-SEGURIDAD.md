@@ -121,6 +121,45 @@ eludir controles de acceso, alterar filtros o leer información de otras tablas)
 
 ---
 
+### VUL-03 · Inyección SQL en el filtro por mesa y validación en creación de pedidos
+
+- **Dónde:** `src/services/pedidos.service.ts` (`listar` y `crear`).
+
+- **Código vulnerable:**
+
+  ```ts
+  if (mesa) sql += ` WHERE mesa = '${mesa}'`;
+  ```
+
+* **Cómo se observó:** al realizar la petición `GET /api/pedidos?mesa=' OR '1'='1`
+  la consulta devolvía los pedidos de **todas** las mesas en lugar de filtrar
+  únicamente por la mesa solicitada.
+
+* **Por qué ocurre:** el parámetro `mesa` se concatena directamente en la
+  cláusula `WHERE` sin parametrización.
+
+* **Corrección:** reemplazar la interpolación por un parámetro vinculado
+  (`WHERE mesa = $1`) pasando `[mesa]` como arreglo de parámetros a `db.query`:
+
+  ```ts
+  const params: unknown[] = [];
+  let sql = 'SELECT * FROM pedidos';
+
+  if (mesa) {
+    params.push(mesa);
+    sql += ` WHERE mesa = $${params.length}`;
+  }
+
+  sql += ' ORDER BY id DESC';
+  const { rows } = await db.query(sql, params);
+  ```
+
+* **Verificación manual:** la petición con `' OR '1'='1` ya no amplía el
+  resultado y devuelve una lista vacía al no existir una mesa con ese nombre
+  literal.
+
+---
+
 ## Cross-Site Scripting (XSS)
 
 **Responsable:** Castellini, Nicolás (Integrante 2)
