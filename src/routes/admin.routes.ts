@@ -2,7 +2,7 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
-import { exec } from 'child_process';
+import { spawn } from 'child_process';
 
 import config from '../config';
 import * as catalogo from '../services/catalogo.service';
@@ -13,6 +13,12 @@ import { imagenPng, MAX_BYTES } from '../validacion-archivo';
 import { idValido } from '../validacion';
 
 const router = express.Router();
+
+const HOSTS_PERMITIDOS = new Set<string>([
+  '127.0.0.1',
+  'localhost',
+  'db',
+]);
 
 /**
  * Rutas del panel de administración.
@@ -142,29 +148,51 @@ router.post('/cambiar-contrasena', async (req, res, next) => {
 /**
  * POST /api/admin/probar-conexion
  *
- * -----------------------------------------------------------------------------
- * FALLA — Inyección de comandos del sistema operativo (OWASP A03:2021)
- * -----------------------------------------------------------------------------
- * La dirección del proveedor se mete dentro de una cadena de shell.
- * Como `exec` launches /bin/sh -c, los operadores del shell (|, ;, &&, $())
- * se interpretan y permiten ejecutar comandos arbitrarios en el contenedor.
- *
  * Corrección: validar el host contra una LISTA BLANCA y ejecutar el proceso
  * con `spawn('ping', ['-c', '3', host], { shell: false })`, sin pasar por el
  * shell.
- * -----------------------------------------------------------------------------
  */
 router.post('/probar-conexion', (req, res) => {
   const { host } = req.body || {};
 
-  // FALLA: entrada de usuario concatenada en un comando de shell.
-  const comando = `ping -c 3 ${host}`;
+  if (typeof host !== 'string' || !HOSTS_PERMITIDOS.has(host)) {
+    return res.status(400).json({ error: 'Host no permitido.' });
+  }
 
-  exec(comando, (error, stdout, stderr) => {
-    res.json({
-      comando,
+  const args = ['-c', '3', host];
+  const proc = spawn('ping', args, { shell: false });
+
+  let stdout = '';
+  let stderr = '';
+  let respondido = false;
+
+  const responder = (payload: { comando: string; salida: string; error: string | null }) => {
+    if (respondido) return;
+    respondido = true;
+    res.json(payload);
+  };
+
+  proc.stdout.on('data', (chunk) => {
+    stdout += chunk.toString();
+  });
+
+  proc.stderr.on('data', (chunk) => {
+    stderr += chunk.toString();
+  });
+
+  proc.on('error', (err) => {
+    responder({
+      comando: `ping ${args.join(' ')}`,
       salida: stdout,
-      error: stderr || (error ? error.message : null),
+      error: stderr || err.message,
+    });
+  });
+
+  proc.on('close', (code) => {
+    responder({
+      comando: `ping ${args.join(' ')}`,
+      salida: stdout,
+      error: stderr || (code !== 0 && code !== null ? `Proceso finalizó con código ${code}` : null),
     });
   });
 });
@@ -173,14 +201,14 @@ router.post('/probar-conexion', (req, res) => {
  * POST /api/admin/subir-archivo
  *
  * -----------------------------------------------------------------------------
-  * Línea de base: carga de archivos sin restricciones (OWASP A04:2021).
+ * Línea de base: carga de archivos sin restricciones (OWASP A04:2021).
  * -----------------------------------------------------------------------------
-  * Ahora sólo acepta PNG RGB/RGBA verificados y acotados; el nombre lo genera
-  * el servidor. Los archivos anteriores no se borran, pero se descargan si
-  * no son PNG.
+ * Ahora sólo acepta PNG RGB/RGBA verificados y acotados; el nombre lo genera
+ * el servidor. Los archivos anteriores no se borran, pero se descargan si
+ * no son PNG.
  *
-  * La carpeta uploads está fuera del árbol de archivos públicos, y sólo se
-  * sirve por la ruta controlada en app.ts.
+ * La carpeta uploads está fuera del árbol de archivos públicos, y sólo se
+ * sirve por la ruta controlada en app.ts.
  * -----------------------------------------------------------------------------
  */
 router.post('/subir-archivo', (req, res, next) => {
@@ -219,3 +247,4 @@ router.post('/subir-archivo', (req, res, next) => {
 });
 
 export default router;
+

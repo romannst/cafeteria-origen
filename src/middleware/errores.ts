@@ -21,12 +21,32 @@ export function rutaNoEncontrada(req: Request, res: Response): void {
 // Express reconoce al manejador de errores por sus CUATRO parámetros: `next`
 // tiene que estar aunque no se use.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function manejadorErrores(err: ErrorHttp, req: Request, res: Response, next: NextFunction): void {
-  console.error('[error]', err.message);
+export function manejadorErrores(
+  err: ErrorHttp,
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void {
+  const status = typeof err.status === 'number' ? err.status : 500;
 
-  // FALLA: se filtra el stack trace al cliente.
-  res.status(err.status || 500).json({
-    error: err.message,
+ 
+  console.error('[error]', {
+    status,
+    metodo: req.method,
+    ruta: req.originalUrl,
+    message: err.message,
     stack: err.stack,
   });
+
+  if (status >= 500) {
+    res.status(status).json({ error: 'Error interno' });
+    return;
+  }
+
+  const mensajeCliente =
+    err.message && !/select|insert|update|delete|from|where|pg_|relation|column|sql/i.test(err.message)
+      ? err.message
+      : 'Solicitud inválida';
+
+  res.status(status).json({ error: mensajeCliente });
 }
