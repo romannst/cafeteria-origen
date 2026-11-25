@@ -924,3 +924,24 @@ reseña, un pedido y una imagen válidos permite verificar que los flujos
 legítimos siguen funcionando. Se distinguen las capturas, los resultados
 manuales sin captura y las pruebas automáticas para no atribuir a cada
 evidencia más alcance del que tiene.
+
+
+## Configuración / Inyección de comandos
+
+### Hallazgos y riesgos abordados
+- **Inyección de comandos en diagnóstico de red (`src/routes/admin.routes.ts`):** El endpoint `POST /api/admin/probar-conexion` concatenaba el `host` recibido en `req.body` dentro de un comando `ping -c 3 ${host}` ejecutado mediante `exec`, permitiendo inyección de comandos del sistema operativo.
+- **Endpoint de diagnóstico / depuración (`src/routes/debug.routes.ts` y `src/app.ts`):** Exposición potencial de información interna/entorno o falta de control de acceso/habilitación condicional.
+- **Exposición de detalles internos en errores (`src/middleware/errores.ts`):** Riesgo de filtrar `stack` traces o información sensible en respuestas al cliente ante fallos.
+- **Cabeceras de seguridad y CSP (`src/app.ts`):** Falta de cabeceras como `X-Content-Type-Options`, `Referrer-Policy` y `Content-Security-Policy` (coordinado con frontend para no romper scripts/estilos/recursos).
+- **Base de datos y contenedores (`docker/initdb/02-usuario-aplicacion.sql`, `docker-compose.yml`, `Dockerfile`):** Uso de credenciales/autenticación débiles o de superusuario (`postgres`) en la app, publicación de puertos sin restringir a `127.0.0.1` y ejecución del proceso con privilegios de `root` en el contenedor.
+
+### Correcciones aplicadas
+- **Validación por lista blanca y `spawn` sin shell (`src/routes/admin.routes.ts`):** Se valida que `host` sea string y pertenezca a `HOSTS_PERMITIDOS` (respondiendo `400` si no está permitido) y se ejecuta `ping` con `spawn('ping', ['-c', '3', host], { shell: false })`.
+- **Restricción de diagnóstico (`src/routes/debug.routes.ts` y `src/app.ts`):** Se protegió el endpoint de diagnóstico, se removió la exposición de datos sensibles del entorno y se condicionó su montaje según configuración.
+- **Manejo centralizado de errores (`src/middleware/errores.ts`):** Se registran los detalles del error internamente en el servidor mientras se devuelve una respuesta genérica y segura al cliente, manteniendo `manejadorErrores` al final del pipeline en `src/app.ts`.
+- **Cabeceras de seguridad y CSP (`src/app.ts`):** Se configuraron cabeceras de seguridad y `Content-Security-Policy` (y se deshabilitó `x-powered-by`), revisando compatibilidad con el frontend.
+- **Mínimos privilegios en PostgreSQL y endurecimiento Docker (`docker/initdb/02-usuario-aplicacion.sql`, `docker-compose.yml`, `Dockerfile`):** Se configuró el rol de aplicación (`origen_app`) con permisos acotados (`CONNECT`, `USAGE` en `public`, `SELECT`/`INSERT`/`UPDATE`/`DELETE` en tablas y `USAGE`/`SELECT` en secuencias), autenticación `scram-sha-256`, binding a `127.0.0.1` en `docker-compose.yml` y usuario no-root (`appuser`) en el `Dockerfile`.
+
+### Verificación y evidencia
+- Estado de pruebas y controles ejecutados: *(completar aquí el resultado real de `npm test`, `npm run test:seguridad` y `npm run check:security`, indicando qué pasó y qué quedó pendiente si aplica).*
+- Archivos de evidencia asociados: *(agregar rutas si guardaron capturas o salidas en el repo).*
