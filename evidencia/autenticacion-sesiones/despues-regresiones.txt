@@ -1,0 +1,104 @@
+# Entorno: Node y PostgreSQL 16 locales (sin Docker)
+# Comando: node --import tsx --test --test-concurrency=1 tests/sesiones-regresion.test.ts tests/permisos-regresion.test.ts
+
+TAP version 13
+# [origen] cuenta "admin" creada con la clave generada: [oculta]
+# [origen] cuenta "valentina" creada con la clave generada: [oculta]
+# [origen] cuenta "barista" creada con la clave generada: [oculta]
+# [origen] cuenta "mozo" creada con la clave generada: [oculta]
+# [origen] cuenta "cliente" creada con la clave generada: [oculta]
+# Subtest: Permisos
+    # Subtest: sólo un admin usa el panel
+    ok 1 - sólo un admin usa el panel
+      ---
+      duration_ms: 3088.747456
+      type: 'test'
+      ...
+    # Subtest: el admin no recibe hashes, valida los cambios y no cambia su propio rol
+    ok 2 - el admin no recibe hashes, valida los cambios y no cambia su propio rol
+      ---
+      duration_ms: 2628.444433
+      type: 'test'
+      ...
+    # Subtest: cambiar la contraseña exige la actual y cierra las otras sesiones
+    ok 3 - cambiar la contraseña exige la actual y cierra las otras sesiones
+      ---
+      duration_ms: 2930.330136
+      type: 'test'
+      ...
+    # Subtest: borrar reseñas exige rol admin
+    ok 4 - borrar reseñas exige rol admin
+      ---
+      duration_ms: 2084.581265
+      type: 'test'
+      ...
+    # Subtest: con acceso estricto impide ver y modificar pedidos ajenos (IDOR)
+    ok 5 - con acceso estricto impide ver y modificar pedidos ajenos (IDOR)
+      ---
+      duration_ms: 4064.422953
+      type: 'test'
+      ...
+    1..5
+ok 1 - Permisos
+  ---
+  duration_ms: 16768.014297
+  type: 'suite'
+  ...
+# Subtest: Contraseñas, login y sesiones
+    # Subtest: convierte a bcrypt una contraseña que estaba en texto plano
+    ok 1 - convierte a bcrypt una contraseña que estaba en texto plano
+      ---
+      duration_ms: 1042.618542
+      type: 'test'
+      ...
+    # Subtest: rechaza tipos raros, bytes nulos y claves de más de 72 bytes sin error 500
+    ok 2 - rechaza tipos raros, bytes nulos y claves de más de 72 bytes sin error 500
+      ---
+      duration_ms: 1347.698756
+      type: 'test'
+      ...
+    # Subtest: emite una cookie protegida y agrega Secure en producción
+    ok 3 - emite una cookie protegida y agrega Secure en producción
+      ---
+      duration_ms: 1333.624392
+      type: 'test'
+      ...
+    # Subtest: renueva el id al iniciar sesión e ignora ids elegidos por el cliente
+    ok 4 - renueva el id al iniciar sesión e ignora ids elegidos por el cliente
+      ---
+      duration_ms: 1319.28736
+      type: 'test'
+      ...
+    # Subtest: vence por inactividad
+    ok 5 - vence por inactividad
+      ---
+      duration_ms: 975.427245
+      type: 'test'
+      ...
+    # Subtest: vence a las 8 horas aunque haya actividad continua
+    ok 6 - vence a las 8 horas aunque haya actividad continua
+      ---
+      duration_ms: 1013.00882
+      type: 'test'
+      ...
+    # Subtest: bloquea una cuenta tras varios fallos, exista o no
+    ok 7 - bloquea una cuenta tras varios fallos, exista o no
+      ---
+      duration_ms: 4055.369204
+      type: 'test'
+      ...
+    1..7
+ok 2 - Contraseñas, login y sesiones
+  ---
+  duration_ms: 11478.171247
+  type: 'suite'
+  ...
+1..2
+# tests 12
+# suites 2
+# pass 12
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 28833.664734

@@ -1,0 +1,15 @@
+# Entorno: Node y PostgreSQL 16 locales (sin Docker)
+# Comprobación 1: base con el esquema anterior y claves de prueba en texto plano
+Antes de arrancar:
+valentina|10|f
+cliente|7|f
+Después de arrancar (usuario|longitud|es_bcrypt):
+valentina|60|t
+cliente|60|t
+Columna agregada:
+usuario_id
+
+# Comprobación 2: NODE_ENV=production, base vacía y sólo CLAVE_INICIAL_VALENTINA definida
+Usuarios creados:
+valentina
+GET /api/pedidos sin sesión: 401
