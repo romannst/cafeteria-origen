@@ -1,0 +1,31 @@
+# Entorno: Node v22.23.5 y PostgreSQL 16 locales (sin Docker) - zip con las correcciones del Integrante 4 aplicadas
+# Comando: node --import tsx --test --test-concurrency=1 --test-name-pattern='el login NO devuelve HTML sin escapar' tests/seguridad.test.ts
+
+TAP version 13
+# [origen] cuenta "admin" creada con la clave generada: [oculta]
+# [origen] cuenta "valentina" creada con la clave generada: [oculta]
+# [origen] cuenta "barista" creada con la clave generada: [oculta]
+# [origen] cuenta "mozo" creada con la clave generada: [oculta]
+# [origen] cuenta "cliente" creada con la clave generada: [oculta]
+# Subtest: Seguridad · Cross-Site Scripting
+    # Subtest: el login NO devuelve HTML sin escapar en el mensaje de error
+    ok 1 - el login NO devuelve HTML sin escapar en el mensaje de error
+      ---
+      duration_ms: 386.357869
+      type: 'test'
+      ...
+    1..1
+ok 1 - Seguridad · Cross-Site Scripting
+  ---
+  duration_ms: 2600.843052
+  type: 'suite'
+  ...
+1..1
+# tests 1
+# suites 1
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3007.374745
