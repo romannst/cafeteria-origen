@@ -947,11 +947,12 @@ evidencia más alcance del que tiene.
 **Responsable:** Peralta, Julián
 **Fallas:** VUL-13 a VUL-21 e IDOR en pedidos · **OWASP:** A01:2021 — Broken Access Control, A02:2021 — Cryptographic Failures, A07:2021 — Identification and Authentication Failures
 
-> Estado: implementación y pruebas automáticas realizadas sobre una copia local
-> del código (Node y PostgreSQL 16, **sin Docker**). **Quedan pendientes** la
-> observación manual de cada falla y la verificación en Docker sobre el código
-> integrado del grupo. El IDOR está corregido **sólo con acceso estricto**; en
-> la configuración Docker de desarrollo sigue abierto.
+> Estado: implementación, pruebas automáticas y observación manual de cada falla
+> realizadas. Verificación en Docker sobre el código integrado del grupo (`dev`):
+> `npm test` 28/28, `npm run test:seguridad` 29/29 y `npm run check:security` 37/37.
+> El IDOR está corregido **sólo con acceso estricto** (`ACCESO_ESTRICTO=true` o
+> producción); en la configuración Docker de desarrollo sigue abierto para no
+> romper los tests funcionales de la consigna (ver la sección IDOR).
 
 ### Qué es y por qué importa
 
