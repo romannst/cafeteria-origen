@@ -7,8 +7,11 @@ import { spawn } from 'child_process';
 import config from '../config';
 import * as catalogo from '../services/catalogo.service';
 import * as usuarios from '../services/usuarios.service';
-import { requiereSesion, requiereRol } from '../middleware/auth';
-import type { Usuario } from '../tipos';
+import { requiereSesion, requiereRol, ROLES_ADMIN } from '../middleware/auth';
+import { limiteCambioPassword } from '../middleware/limites';
+import { crearSesion, destruirSesionesDeUsuario } from '../middleware/sesion';
+import { problemaDePassword } from '../passwords';
+import { leerCambiosUsuario } from '../validacion-usuario';
 import { imagenPng, MAX_BYTES } from '../validacion-archivo';
 import { idValido } from '../validacion';
 
@@ -24,20 +27,59 @@ const HOSTS_PERMITIDOS = new Set<string>([
  * Rutas del panel de administración.
  *
  * -----------------------------------------------------------------------------
- * FALLA — Autorización ausente / escalada de privilegios (OWASP A01:2021)
+ * CORREGIDO — Autorización ausente / escalada de privilegios (OWASP A01:2021)
  * -----------------------------------------------------------------------------
- * Se exige estar autenticado, pero NO se comprueba el rol: `requiereRol` está
- * importado y no se usa. Cualquier usuario autenticado (incluso con rol
- * "cliente") entra al panel y puede:
- *   - crear, editar y BORRAR productos,
- *   - cambiar contraseñas,
- *   - dar de alta usuarios y cambiarles el rol (escalada de privilegios),
- *   - ejecutar comandos en el servidor.
- *
- * Corrección: `router.use(requiereRol('admin'))` sobre las rutas sensibles.
+ * Todo exige sesión y, salvo el cambio de la propia contraseña, rol admin. El
+ * control está en `router.use`, antes de las rutas: una ruta nueva queda
+ * protegida sin tener que acordarse, e incluso las inexistentes responden 403.
  * -----------------------------------------------------------------------------
  */
 router.use(requiereSesion);
+
+router.param('id', (req, res, next, id) => {
+  if (!idValido(id)) return res.status(400).json({ error: 'ID inválido.' });
+  next();
+});
+
+/**
+ * POST /api/admin/cambiar-contrasena
+ *
+ * Disponible para cualquier usuario autenticado (cambia SÓLO la suya: el id
+ * sale de la sesión, no del cuerpo). Token CSRF verificado en src/app.ts.
+ *
+ * CORREGIDO: pide la contraseña actual (una sesión robada no alcanza para
+ * quedarse con la cuenta), limita los intentos, valida la nueva, la guarda con
+ * bcrypt, cierra las demás sesiones y renueva la propia.
+ */
+router.post('/cambiar-contrasena', limiteCambioPassword, async (req, res, next) => {
+  try {
+    const { actual, nueva } = req.body || {};
+    if (typeof actual !== 'string' || !actual || typeof nueva !== 'string' || !nueva) {
+      return res.status(400).json({ error: 'Falta la contraseña actual o la nueva.' });
+    }
+    // (`req.usuario!`: requiereSesion ya garantizó que hay un usuario.)
+    const yo = req.usuario!;
+    const problema = problemaDePassword(nueva, yo.username);
+    if (problema) {
+      return res.status(400).json({ error: problema });
+    }
+    if (!(await usuarios.verificarPassword(yo.id, actual))) {
+      return res.status(403).json({ error: 'La contraseña actual no coincide.' });
+    }
+    if (actual === nueva) {
+      return res.status(400).json({ error: 'La contraseña nueva debe ser distinta de la actual.' });
+    }
+    const usuario = await usuarios.cambiarPassword(yo.id, nueva);
+    destruirSesionesDeUsuario(yo.id);
+    crearSesion(req, res, yo);
+    res.json({ mensaje: 'Contraseña actualizada.', usuario });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// A partir de acá, sólo administradores.
+router.use(requiereRol(...ROLES_ADMIN));
 
 router.param('id', (req, res, next, id) => {
   if (!idValido(id)) return res.status(400).json({ error: 'ID inválido.' });
@@ -56,25 +98,52 @@ router.get('/usuarios', async (req, res, next) => {
 /**
  * PUT /api/admin/usuarios/:id
  *
- * FALLA — Asignación masiva: se actualiza cualquier campo que llegue en el
- * cuerpo, incluido el `rol`. Un usuario con rol "cliente" puede mandarse
- * `{"rol": "admin"}` y convertirse en administrador.
+ * CORREGIDO — Escalada de privilegios y asignación masiva: sólo un admin llega
+ * hasta acá, se toman únicamente campos conocidos y validados, el rol sale de
+ * una lista blanca y un admin no puede cambiar su propio rol (así tampoco se
+ * queda el sistema sin administrador por error). La contraseña propia se
+ * cambia por /cambiar-contrasena, que exige la actual.
  */
 router.put('/usuarios/:id', async (req, res, next) => {
   try {
-    const { username, nombre, rol, password } = req.body || {};
-    const cambios: Partial<Usuario> = {};
-    if (username !== undefined) cambios.username = username;
-    if (nombre !== undefined) cambios.nombre = nombre;
-    if (rol !== undefined) cambios.rol = rol;
-    if (password !== undefined) cambios.password = password;
+    const leido = leerCambiosUsuario(req.body);
+    if ('error' in leido) {
+      return res.status(400).json({ error: leido.error });
+    }
+    const { cambios } = leido;
+    const id = Number(req.params.id);
+    const yo = req.usuario!;
+    const esPropio = id === yo.id;
 
-    const usuario = await usuarios.actualizar(req.params.id, cambios);
+    if (esPropio && cambios.rol !== undefined && cambios.rol !== yo.rol) {
+      return res.status(403).json({ error: 'No podés cambiar tu propio rol.' });
+    }
+    if (esPropio && cambios.password !== undefined) {
+      return res
+        .status(403)
+        .json({ error: 'Para tu contraseña usá la opción "Cambiar mi contraseña".' });
+    }
+
+    const usuario = await usuarios.actualizar(id, cambios);
     if (!usuario) {
       return res.status(404).json({ error: 'Usuario no encontrado.' });
     }
+    if (esPropio) {
+      // Se refresca la copia guardada en la sesión.
+      Object.assign(req.sesion!.usuario, {
+        username: usuario.username,
+        nombre: usuario.nombre,
+      });
+    } else {
+      // El usuario modificado tiene que volver a iniciar sesión.
+      destruirSesionesDeUsuario(id);
+    }
     res.json(usuario);
   } catch (err) {
+    // El nombre de usuario es único en la base.
+    if ((err as { code?: string }).code === '23505') {
+      return res.status(409).json({ error: 'Ya existe un usuario con ese nombre.' });
+    }
     next(err);
   }
 });
@@ -118,28 +187,6 @@ router.delete('/productos/:id', async (req, res, next) => {
       return res.status(404).json({ error: 'Producto no encontrado.' });
     }
     res.json(producto);
-  } catch (err) {
-    next(err);
-  }
-});
-
-/**
- * POST /api/admin/cambiar-contrasena
- *
- * Token CSRF verificado en src/app.ts.
- * FALLAS pendientes de autenticación: sin límite de intentos, y la contraseña nueva
- * se guarda en texto plano.
- */
-router.post('/cambiar-contrasena', async (req, res, next) => {
-  try {
-    const { nueva } = req.body || {};
-    if (!nueva) {
-      return res.status(400).json({ error: 'Falta la contraseña nueva.' });
-    }
-    // FALLA: no se valida la longitud ni la complejidad de la contraseña.
-    // (`req.usuario!`: requiereSesion ya garantizó que hay un usuario.)
-    const usuario = await usuarios.cambiarPassword(req.usuario!.id, nueva);
-    res.json({ mensaje: 'Contraseña actualizada.', usuario });
   } catch (err) {
     next(err);
   }
