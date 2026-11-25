@@ -414,12 +414,16 @@
   function cambiarPassword(evento) {
     evento.preventDefault();
     var caja = $('#password-feedback');
-    postJSON('/admin/cambiar-contrasena', { nueva: $('#nueva-password').value }).then(function (resp) {
+    postJSON('/admin/cambiar-contrasena', {
+      actual: $('#actual-password').value,
+      nueva: $('#nueva-password').value,
+    }).then(function (resp) {
       if (!resp.ok) {
         feedback(caja, 'No se pudo cambiar: ' + (resp.data.error || 'error desconocido'), false);
         return;
       }
       feedback(caja, 'Contraseña actualizada.', true);
+      $('#actual-password').value = '';
       $('#nueva-password').value = '';
     });
   }

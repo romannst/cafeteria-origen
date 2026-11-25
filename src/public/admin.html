@@ -41,10 +41,6 @@
         <button type="submit" class="btn btn-primary btn-block">Entrar</button>
         <p class="form-feedback" id="login-feedback"></p>
       </form>
-      <p class="muted small">
-        <strong>Usuarios de prueba:</strong> admin/admin ·
-        valentina/origen2024 · barista/cafe123 · mozo/mozo123 · cliente/cliente
-      </p>
     </section>
 
     <!-- ============ PANEL ============ -->
@@ -171,7 +167,8 @@
         <div class="card">
           <h3>Cambiar mi contraseña</h3>
           <form id="form-password" novalidate>
-            <label class="field"><span>Nueva contraseña</span><input type="password" id="nueva-password" required></label>
+            <label class="field"><span>Contraseña actual</span><input type="password" id="actual-password" autocomplete="current-password" required></label>
+            <label class="field"><span>Nueva contraseña (mínimo 8 caracteres)</span><input type="password" id="nueva-password" autocomplete="new-password" minlength="8" required></label>
             <button type="submit" class="btn btn-primary">Actualizar contraseña</button>
             <p class="form-feedback" id="password-feedback"></p>
           </form>
