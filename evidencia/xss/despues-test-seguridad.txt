@@ -1,0 +1,251 @@
+﻿
+> cafeteria-origen@1.0.0 test:seguridad
+> node --import tsx --test --test-concurrency=1 tests/seguridad.test.ts tests/seguridad-login.test.ts tests/seguridad-fuerza-bruta.test.ts
+
+TAP version 13
+# Subtest: Seguridad · Fuerza bruta
+    # Subtest: el login bloquea o limita los intentos repetidos
+    ok 1 - el login bloquea o limita los intentos repetidos
+      ---
+      duration_ms: 2181.37119
+      type: 'test'
+      ...
+    # Subtest: el login correcto sigue funcionando después de un bloqueo
+    ok 2 - el login correcto sigue funcionando después de un bloqueo
+      ---
+      duration_ms: 9.589806
+      type: 'test'
+      ...
+    1..2
+ok 1 - Seguridad · Fuerza bruta
+  ---
+  duration_ms: 2546.403938
+  type: 'suite'
+  ...
+# Subtest: Seguridad · Login
+    # Subtest: los mensajes de login son genéricos (sin enumeración de usuarios)
+    ok 1 - los mensajes de login son genéricos (sin enumeración de usuarios)
+      ---
+      duration_ms: 1256.547528
+      type: 'test'
+      ...
+    # Subtest: el login NO acepta el bypass con payload SQL
+    ok 2 - el login NO acepta el bypass con payload SQL
+      ---
+      duration_ms: 316.125084
+      type: 'test'
+      ...
+    # Subtest: el login NO acepta el payload que comenta la contraseña
+    ok 3 - el login NO acepta el payload que comenta la contraseña
+      ---
+      duration_ms: 303.437276
+      type: 'test'
+      ...
+    1..3
+ok 2 - Seguridad · Login
+  ---
+  duration_ms: 2237.528497
+  type: 'suite'
+  ...
+# Subtest: Seguridad · Inyección SQL
+    # Subtest: la búsqueda del catálogo NO se puede ampliar con SQL
+    ok 1 - la búsqueda del catálogo NO se puede ampliar con SQL
+      ---
+      duration_ms: 22.852414
+      type: 'test'
+      ...
+    # Subtest: el filtro por origen NO se puede ampliar con SQL
+    ok 2 - el filtro por origen NO se puede ampliar con SQL
+      ---
+      duration_ms: 8.434405
+      type: 'test'
+      ...
+    # Subtest: el filtro por mesa NO se puede ampliar con SQL
+    ok 3 - el filtro por mesa NO se puede ampliar con SQL
+      ---
+      duration_ms: 7.567704
+      type: 'test'
+      ...
+    # Subtest: el reporte por origen NO filtra otras tablas con UNION
+    ok 4 - el reporte por origen NO filtra otras tablas con UNION
+      ---
+      duration_ms: 7.801105
+      type: 'test'
+      ...
+    # Subtest: la aplicación NO se conecta con un superusuario de la base
+    ok 5 - la aplicación NO se conecta con un superusuario de la base
+      ---
+      duration_ms: 2.269901
+      type: 'test'
+      ...
+    1..5
+ok 3 - Seguridad · Inyección SQL
+  ---
+  duration_ms: 419.924143
+  type: 'suite'
+  ...
+# Subtest: Seguridad · Cross-Site Scripting
+    # Subtest: el servidor NO devuelve HTML sin escapar en los errores
+    ok 1 - el servidor NO devuelve HTML sin escapar en los errores
+      ---
+      duration_ms: 6.145803
+      type: 'test'
+      ...
+    # Subtest: el login NO devuelve HTML sin escapar en el mensaje de error
+    ok 2 - el login NO devuelve HTML sin escapar en el mensaje de error
+      ---
+      duration_ms: 334.139394
+      type: 'test'
+      ...
+    # Subtest: el cliente NO inserta datos con innerHTML
+    ok 3 - el cliente NO inserta datos con innerHTML
+      ---
+      duration_ms: 12.165807
+      type: 'test'
+      ...
+    1..3
+ok 4 - Seguridad · Cross-Site Scripting
+  ---
+  duration_ms: 368.615713
+  type: 'suite'
+  ...
+# Subtest: Seguridad · CSRF
+    # Subtest: existe un token anti-CSRF y las peticiones sin token se rechazan
+    ok 1 - existe un token anti-CSRF y las peticiones sin token se rechazan
+      ---
+      duration_ms: 963.372858
+      type: 'test'
+      ...
+    1..1
+ok 5 - Seguridad · CSRF
+  ---
+  duration_ms: 988.104873
+  type: 'suite'
+  ...
+# Subtest: Seguridad · Validación de entrada
+    # Subtest: no se aceptan cantidades negativas
+    ok 1 - no se aceptan cantidades negativas
+      ---
+      duration_ms: 11.734207
+      type: 'test'
+      ...
+    # Subtest: no se aceptan cantidades no numéricas
+    ok 2 - no se aceptan cantidades no numéricas
+      ---
+      duration_ms: 12.334007
+      type: 'test'
+      ...
+    # Subtest: no se aceptan reseñas sin límite de longitud
+    ok 3 - no se aceptan reseñas sin límite de longitud
+      ---
+      duration_ms: 7.194904
+      type: 'test'
+      ...
+    # Subtest: no se aceptan archivos ejecutables ni se escribe fuera de uploads
+    ok 4 - no se aceptan archivos ejecutables ni se escribe fuera de uploads
+      ---
+      duration_ms: 932.076012
+      type: 'test'
+      ...
+    1..4
+ok 6 - Seguridad · Validación de entrada
+  ---
+  duration_ms: 984.23434
+  type: 'suite'
+  ...
+# Subtest: Seguridad · Autenticación y sesiones
+    # Subtest: las contraseñas NO se guardan en texto plano
+    ok 1 - las contraseñas NO se guardan en texto plano
+      ---
+      duration_ms: 1.2215
+      type: 'test'
+      ...
+    # Subtest: la cookie de sesión lleva HttpOnly, Secure y SameSite
+    ok 2 - la cookie de sesión lleva HttpOnly, Secure y SameSite
+      ---
+      duration_ms: 896.814063
+      type: 'test'
+      ...
+    # Subtest: el identificador de sesión es aleatorio y no predecible
+    ok 3 - el identificador de sesión es aleatorio y no predecible
+      ---
+      duration_ms: 1512.973339
+      type: 'test'
+      ...
+    # Subtest: el logout invalida la sesión en el servidor
+    ok 4 - el logout invalida la sesión en el servidor
+      ---
+      duration_ms: 911.460362
+      type: 'test'
+      ...
+    # Subtest: un usuario sin rol admin NO puede entrar al panel
+    ok 5 - un usuario sin rol admin NO puede entrar al panel
+      ---
+      duration_ms: 922.178663
+      type: 'test'
+      ...
+    # Subtest: un usuario NO puede cambiar su propio rol a admin
+    ok 6 - un usuario NO puede cambiar su propio rol a admin
+      ---
+      duration_ms: 894.472363
+      type: 'test'
+      ...
+    1..6
+ok 7 - Seguridad · Autenticación y sesiones
+  ---
+  duration_ms: 5166.243089
+  type: 'suite'
+  ...
+# Subtest: Seguridad · Inyección de comandos
+    # Subtest: el endpoint de conexión NO ejecuta el comando inyectado
+    ok 1 - el endpoint de conexión NO ejecuta el comando inyectado
+      ---
+      duration_ms: 921.368663
+      type: 'test'
+      ...
+    # Subtest: el endpoint de conexión NO ejecuta un segundo comando encadenado
+    ok 2 - el endpoint de conexión NO ejecuta un segundo comando encadenado
+      ---
+      duration_ms: 903.174763
+      type: 'test'
+      ...
+    1..2
+ok 8 - Seguridad · Inyección de comandos
+  ---
+  duration_ms: 1846.433225
+  type: 'suite'
+  ...
+# Subtest: Seguridad · Configuración y exposición de información
+    # Subtest: el endpoint de diagnóstico NO expone secretos
+    ok 1 - el endpoint de diagnóstico NO expone secretos
+      ---
+      duration_ms: 4.5719
+      type: 'test'
+      ...
+    # Subtest: la API NO devuelve stack traces al cliente
+    ok 2 - la API NO devuelve stack traces al cliente
+      ---
+      duration_ms: 4.9187
+      type: 'test'
+      ...
+    # Subtest: el sitio envía cabeceras de seguridad
+    ok 3 - el sitio envía cabeceras de seguridad
+      ---
+      duration_ms: 10.416799
+      type: 'test'
+      ...
+    1..3
+ok 9 - Seguridad · Configuración y exposición de información
+  ---
+  duration_ms: 37.691098
+  type: 'suite'
+  ...
+1..9
+# tests 29
+# suites 9
+# pass 29
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 16589.160421

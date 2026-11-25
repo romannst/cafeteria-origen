@@ -510,6 +510,16 @@ Pruebas manuales realizadas (todas muestran el payload como texto, sin ejecutar)
 - Panel: `admin.html?vista=<img src=x onerror=alert('DOM')>`
 - Login del panel con usuario `<img src=x onerror=alert(1)>`
 
+Evidencia en Docker (después de las correcciones):
+[npm test](evidencia/xss/despues-npm-test.txt) ·
+[test:seguridad](evidencia/xss/despues-test-seguridad.txt) ·
+[check:security](evidencia/xss/despues-check-security.txt) ·
+[buscador](evidencia/xss/despues-buscador.jpg) ·
+[reseña](evidencia/xss/despues-resena.jpg) ·
+[panel 1](evidencia/xss/despues-panel-1.jpg) ·
+[panel 2](evidencia/xss/despues-panel-2.jpg) ·
+[login](evidencia/xss/despues-login.jpg)
+
 Además se verificó que el sitio sigue funcionando igual: catálogo, filtros,
 buscador, carrito, envío de pedidos, reseñas y todas las pestañas del panel.
 
