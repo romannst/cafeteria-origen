@@ -1,0 +1,70 @@
+﻿
+> cafeteria-origen@1.0.0 check:security
+> node --import tsx scripts/check-security.ts
+
+
+  CHECKLIST DE SEGURIDAD — CAFETERÍA ORIGEN
+  ────────────────────────────────────────────────────────────
+
+  INYECCIÓN SQL
+    ✔ SQLI-01   Ninguna consulta SQL interpola la entrada del usuario
+    ✔ SQLI-02   La capa de servicios usa consultas parametrizadas
+    ✔ SQLI-03   La base de datos no acepta conexiones sin contraseña
+    ✔ SQLI-04   El puerto de la base de datos no está publicado al host
+    ✔ SQLI-05   La aplicación no se conecta con el superusuario
+
+  XSS
+    ✔ XSS-01    El cliente no inyecta datos con innerHTML
+    ✔ XSS-02    Los mensajes de error del servidor no reflejan la entrada
+    ✔ XSS-03    Hay una Content Security Policy configurada
+    ✔ XSS-04    El contenido enviado por el usuario se acota en el servidor
+
+  CSRF
+    ✔ CSRF-01   Existe un token anti-CSRF
+    ✔ CSRF-02   La cookie de sesión usa SameSite
+    ✔ CSRF-03   Se verifica el origen de las peticiones que cambian estado
+    ✔ CSRF-04   Las operaciones que cambian estado no se hacen con GET
+
+  VALIDACIÓN DE ENTRADA
+    ✔ VAL-01    Los ids de las rutas se validan como enteros
+    ✔ VAL-02    Se validan tipo, longitud y rango de las entradas
+    ✔ VAL-03    Se usan listas blancas de valores permitidos
+    ✔ VAL-04    La carga de archivos valida la extensión
+    ✔ VAL-05    La carga de archivos limita el tamaño
+    ✔ VAL-06    No se filtran stack traces al cliente
+
+  AUTENTICACIÓN Y SESIONES
+    ✔ AUTH-01   Las contraseñas se hashean con bcrypt y salt
+    ✔ AUTH-02   La carga inicial de usuarios hashea las contraseñas
+    ✔ AUTH-03   El login compara la contraseña con bcrypt
+    ✔ AUTH-04   Hay protección contra fuerza bruta
+    ✔ AUTH-05   La cookie de sesión es HttpOnly
+    ✔ AUTH-06   La cookie de sesión es Secure y SameSite
+    ✔ AUTH-07   El identificador de sesión no es un contador
+    ✔ AUTH-08   El identificador de sesión es aleatorio
+    ✔ AUTH-09   Las sesiones tienen fecha de vencimiento
+    ✔ AUTH-10   La expiración de la sesión está calculada
+    ✔ AUTH-11   El logout invalida la sesión en el servidor
+    ✔ AUTH-12   Los mensajes de login son genéricos
+    ✔ AUTH-13   No hay credenciales triviales de fábrica
+    ✔ AUTH-14   Las rutas de administración exigen el rol admin
+    ✔ AUTH-15   El rol de un usuario no se acepta sin verificar
+
+  INYECCIÓN DE COMANDOS
+    ✔ CMD-01    No se ejecutan comandos con la entrada del usuario
+    ✔ CMD-02    El comando se ejecuta sin shell y con argumentos separados
+    ✔ CMD-03    El host se valida contra una lista blanca
+
+  CONFIGURACIÓN
+    ✔ CFG-01    Se usan cabeceras de seguridad (helmet)
+    ✔ CFG-02    No hay secretos escritos en el código
+    ✔ CFG-03    El endpoint de diagnóstico está protegido
+    ✔ CFG-04    El diagnóstico no filtra variables de entorno
+    ✔ CFG-05    El contenedor no corre como root
+
+  ────────────────────────────────────────────────────────────
+  ✔ Todos los controles críticos están cubiertos (37/37).
+
+  Recordá: este script sólo analiza el código. No explotás nada,
+  observás los síntomas desde la interfaz y recién ahí corregís.
+

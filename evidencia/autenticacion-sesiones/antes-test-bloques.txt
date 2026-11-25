@@ -1,0 +1,251 @@
+# Entorno: Node v22.23.5 y PostgreSQL 16 locales (sin Docker) - código del zip, antes de las correcciones
+# Comando: node --import tsx --test --test-concurrency=1 --test-name-pattern='Seguridad · (Autenticación y sesiones|Login|Fuerza bruta)' tests/seguridad.test.ts tests/seguridad-login.test.ts tests/seguridad-fuerza-bruta.test.ts
+
+TAP version 13
+# Subtest: Seguridad · Fuerza bruta
+    # Subtest: el login bloquea o limita los intentos repetidos
+    not ok 1 - el login bloquea o limita los intentos repetidos
+      ---
+      duration_ms: 73.515474
+      type: 'test'
+      location: './tests/seguridad-fuerza-bruta.test.ts:2:1156'
+      failureType: 'testCodeFailure'
+      error: 'La API aceptó 10 intentos de login fallidos seguidos sin bloquear ni limitar nada (fuerza bruta ilimitada). Aplicá rate limiting con express-rate-limit sobre /api/auth/login.'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: true
+      actual: false
+      operator: '=='
+      stack: |-
+        TestContext.<anonymous> (./tests/seguridad-fuerza-bruta.test.ts:50:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Promise.all (index 0)
+        async Suite.run (node:internal/test_runner/test:1442:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: el login correcto sigue funcionando después de un bloqueo
+    ok 2 - el login correcto sigue funcionando después de un bloqueo
+      ---
+      duration_ms: 5.474642
+      type: 'test'
+      ...
+    1..2
+not ok 1 - Seguridad · Fuerza bruta
+  ---
+  duration_ms: 120.000551
+  type: 'suite'
+  location: './tests/seguridad-fuerza-bruta.test.ts:2:930'
+  failureType: 'subtestsFailed'
+  error: '1 subtest failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: Seguridad · Login
+    # Subtest: los mensajes de login son genéricos (sin enumeración de usuarios)
+    not ok 1 - los mensajes de login son genéricos (sin enumeración de usuarios)
+      ---
+      duration_ms: 43.388862
+      type: 'test'
+      location: './tests/seguridad-login.test.ts:2:1149'
+      failureType: 'testCodeFailure'
+      error: |-
+        Los mensajes distinguen entre "usuario inexistente" (El usuario "usuario-que-no-existe-xyz" no existe en el sistema.) y "contraseña incorrecta" (La contraseña es incorrecta.): permite enumerar usuarios.
+        + actual - expected
+        
+        + 'El usuario "usuario-que-no-existe-xyz" no existe en el sistema.'
+        - 'La contraseña es incorrecta.'
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 'La contraseña es incorrecta.'
+      actual: 'El usuario "usuario-que-no-existe-xyz" no existe en el sistema.'
+      operator: 'strictEqual'
+      stack: |-
+        TestContext.<anonymous> (./tests/seguridad-login.test.ts:46:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Promise.all (index 0)
+        async Suite.run (node:internal/test_runner/test:1442:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: el login NO acepta el bypass con payload SQL
+    not ok 2 - el login NO acepta el bypass con payload SQL
+      ---
+      duration_ms: 7.770583
+      type: 'test'
+      location: './tests/seguridad-login.test.ts:2:1972'
+      failureType: 'testCodeFailure'
+      error: `El login devolvió 200 con el payload "' OR 1=1 --": la inyección SQL del login sigue abierta (servicios/usuarios.service.ts).`
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 200
+      actual: 200
+      operator: 'notStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (./tests/seguridad-login.test.ts:58:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: el login NO acepta el payload que comenta la contraseña
+    not ok 3 - el login NO acepta el payload que comenta la contraseña
+      ---
+      duration_ms: 5.796909
+      type: 'test'
+      location: './tests/seguridad-login.test.ts:2:2494'
+      failureType: 'testCodeFailure'
+      error: `El login aceptó "admin'--" sin contraseña válida.`
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 200
+      actual: 200
+      operator: 'notStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (./tests/seguridad-login.test.ts:70:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    1..3
+not ok 2 - Seguridad · Login
+  ---
+  duration_ms: 95.61664
+  type: 'suite'
+  location: './tests/seguridad-login.test.ts:2:930'
+  failureType: 'subtestsFailed'
+  error: '3 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: Seguridad · Autenticación y sesiones
+    # Subtest: las contraseñas NO se guardan en texto plano
+    not ok 1 - las contraseñas NO se guardan en texto plano
+      ---
+      duration_ms: 5.409297
+      type: 'test'
+      location: './tests/seguridad.test.ts:3:6625'
+      failureType: 'testCodeFailure'
+      error: |-
+        Contraseñas sin hashear: admin, valentina, barista, mozo, cliente. Usá bcryptjs (bcrypt.hash / bcrypt.compare). Si la base ya tenía las contraseñas en claro, regenerala con `docker compose down -v && docker compose up -d` o hacé que la carga inicial actualice los hashes.
+        
+        5 !== 0
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 0
+      actual: 5
+      operator: 'strictEqual'
+      stack: |-
+        TestContext.<anonymous> (./tests/seguridad.test.ts:460:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Promise.all (index 0)
+        async Suite.run (node:internal/test_runner/test:1442:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: la cookie de sesión lleva HttpOnly, Secure y SameSite
+    not ok 2 - la cookie de sesión lleva HttpOnly, Secure y SameSite
+      ---
+      duration_ms: 37.298448
+      type: 'test'
+      location: './tests/seguridad.test.ts:3:7219'
+      failureType: 'testCodeFailure'
+      error: 'La cookie de sesión no tiene HttpOnly: sid=sesion_2; Path=/; SameSite=Lax'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: true
+      actual: false
+      operator: '=='
+      stack: |-
+        TestContext.<anonymous> (./tests/seguridad.test.ts:475:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: el identificador de sesión es aleatorio y no predecible
+    not ok 3 - el identificador de sesión es aleatorio y no predecible
+      ---
+      duration_ms: 18.788392
+      type: 'test'
+      location: './tests/seguridad.test.ts:3:8129'
+      failureType: 'testCodeFailure'
+      error: 'El identificador de sesión "sesion_4" es un contador.'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: true
+      actual: false
+      operator: '=='
+      stack: |-
+        <anonymous> (./tests/seguridad.test.ts:513:14)
+        Array.forEach (<anonymous>)
+        TestContext.<anonymous> (./tests/seguridad.test.ts:510:9)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: el logout invalida la sesión en el servidor
+    not ok 4 - el logout invalida la sesión en el servidor
+      ---
+      duration_ms: 20.915956
+      type: 'test'
+      location: './tests/seguridad.test.ts:3:9038'
+      failureType: 'testCodeFailure'
+      error: |-
+        La sesión sigue viva en el servidor después del logout: hay que borrarla del almacén de sesiones, no sólo la cookie.
+        
+        200 !== 401
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 401
+      actual: 200
+      operator: 'strictEqual'
+      stack: |-
+        TestContext.<anonymous> (./tests/seguridad.test.ts:536:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: un usuario sin rol admin NO puede entrar al panel
+    not ok 5 - un usuario sin rol admin NO puede entrar al panel
+      ---
+      duration_ms: 10.284497
+      type: 'test'
+      location: './tests/seguridad.test.ts:3:10235'
+      failureType: 'testCodeFailure'
+      error: 'Un usuario con rol "cliente" accedió a /api/admin/usuarios (status 200): falta el control de roles.'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: true
+      actual: false
+      operator: '=='
+      stack: |-
+        TestContext.<anonymous> (./tests/seguridad.test.ts:555:14)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: un usuario NO puede cambiar su propio rol a admin
+    ok 6 - un usuario NO puede cambiar su propio rol a admin
+      ---
+      duration_ms: 11.786763
+      type: 'test'
+      ...
+    1..6
+not ok 3 - Seguridad · Autenticación y sesiones
+  ---
+  duration_ms: 140.304809
+  type: 'suite'
+  location: './tests/seguridad.test.ts:3:6384'
+  failureType: 'subtestsFailed'
+  error: '5 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+1..3
+# tests 11
+# suites 3
+# pass 2
+# fail 9
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1398.906066

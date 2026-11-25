@@ -13,6 +13,8 @@ export interface NuevoPedido {
   mesa: string;
   cliente: string;
   items: ItemPedido[];
+  /** Sale de la sesión del servidor, nunca del cuerpo de la petición. */
+  usuarioId?: number | null;
 }
 
 /** Id tal como llega en la URL (texto) o ya convertido. */
@@ -22,17 +24,17 @@ type Id = number | string;
  * Servicio de pedidos.
  *
  * -----------------------------------------------------------------------------
- * FALLA — Validación de entrada débil o insuficiente (OWASP A04:2021)
+ * Línea de base: validación insuficiente (OWASP A04:2021)
  * -----------------------------------------------------------------------------
- * No se valida nada de lo que llega en el cuerpo de la petición:
+ * Anteriormente no se validaba lo que llegaba en el cuerpo de la petición:
  *  - `cantidad` puede ser negativa (el total del pedido queda negativo),
  *    cero, un número decimal o un texto.
  *  - No hay un máximo de items ni de cantidad (DoS / facturas absurdas).
  *  - `mesa` y `cliente` no se validan ni se acotan en longitud.
  *  - Si el productoId no existe, la excepción sube y se filtra el stack.
  *
- * La corrección es validar TIPO (entero), RANGO (1..N), LONGITUD y FORMATO
- * de cada campo en el servidor, usando listas blancas.
+ * Las peticiones HTTP ahora se validan en pedidos.routes.ts antes de llamar a
+ * este servicio. Coordinar cualquier cambio de consultas con el bloque SQLi.
  * -----------------------------------------------------------------------------
  */
 
@@ -40,16 +42,19 @@ type Id = number | string;
  * Crea un pedido a partir de una lista de items { productoId, cantidad }.
  * Total = suma de calcularPrecio(producto) x cantidad
  */
-export async function crear({ mesa, cliente, items }: NuevoPedido): Promise<PedidoConItems | null> {
-  // FALLA: no se valida que items exista, sea un array, ni que cada cantidad
-  // sea un entero positivo. Los tipos de `NuevoPedido` NO alcanzan: el cuerpo
-  // de la petición llega como `any` y en ejecución puede traer cualquier cosa.
+export async function crear({ mesa, cliente, items, usuarioId = null }: NuevoPedido): Promise<PedidoConItems | null> {
+  // La ruta valida el cuerpo antes de llamar al servicio; los tipos de
+  // TypeScript por sí solos no validan entradas HTTP.
   const filas: { productoId: number; cantidad: number; precioUnitario: number }[] = [];
 
   for (const item of items) {
-    // Si el producto no existe, buscarProducto devuelve null y `precio`
-    // revienta con un TypeError cuyo stack se filtra al cliente.
+    // Un producto inexistente se rechaza antes de insertar el pedido.
     const producto = await buscarProducto(item.productoId);
+    if (!producto) {
+      const error = new Error('Producto no encontrado.') as Error & { status: number };
+      error.status = 400;
+      throw error;
+    }
     const precioUnitario = calcularPrecio(producto);
     filas.push({
       productoId: producto.id,
@@ -64,10 +69,10 @@ export async function crear({ mesa, cliente, items }: NuevoPedido): Promise<Pedi
   );
 
   const { rows } = await db.query<Pedido>(
-    `INSERT INTO pedidos (mesa, cliente, estado, total)
-     VALUES ($1, $2, 'abierto', $3)
+    `INSERT INTO pedidos (mesa, cliente, estado, total, usuario_id)
+     VALUES ($1, $2, 'abierto', $3, $4)
      RETURNING *`,
-    [mesa, cliente, total]
+    [mesa, cliente, total, usuarioId]
   );
   const pedido = rows[0];
 
@@ -90,12 +95,24 @@ async function buscarProducto(productoId: number): Promise<Producto> {
 
 /** Lista pedidos (con filtro opcional por mesa). */
 export async function listar(mesa?: string): Promise<Pedido[]> {
-  // FALLA: inyección SQL en el filtro de mesa.
-  let sql = 'SELECT * FROM pedidos';
-  if (mesa) sql += ` WHERE mesa = '${mesa}'`;
-  sql += ' ORDER BY id DESC';
+  // La mesa viaja como parámetro ($1): nunca forma parte del texto SQL.
+  const { rows } = await db.query<Pedido>(
+    `SELECT * FROM pedidos
+      WHERE ($1::text IS NULL OR mesa = $1)
+      ORDER BY id DESC`,
+    [mesa || null]
+  );
+  return rows;
+}
 
-  const { rows } = await db.query<Pedido>(sql);
+/** Pedidos de un usuario, con filtro opcional por mesa (parametrizada). */
+export async function listarDeUsuario(usuarioId: number, mesa?: string): Promise<Pedido[]> {
+  const { rows } = await db.query<Pedido>(
+    `SELECT * FROM pedidos
+      WHERE usuario_id = $1 AND ($2::text IS NULL OR mesa = $2)
+      ORDER BY id DESC`,
+    [usuarioId, mesa || null]
+  );
   return rows;
 }
 

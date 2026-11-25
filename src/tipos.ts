@@ -53,13 +53,17 @@ export interface Usuario {
   creado_en: Date;
 }
 
+/** Fila de `usuarios` sin el hash: lo único que puede salir en una respuesta. */
+export type UsuarioPublico = Omit<Usuario, 'password'>;
+
 /** Lo que se guarda del usuario dentro de la sesión. */
 export type UsuarioSesion = Pick<Usuario, 'id' | 'username' | 'rol' | 'nombre'>;
 
 export interface Sesion {
   usuario: UsuarioSesion;
   creadaEn: number;
-  expiraEn: number | null;
+  /** Vence por inactividad; nunca supera creadaEn + la vida máxima. */
+  expiraEn: number;
 }
 
 /** Fila de la tabla `pedidos`. */
@@ -70,6 +74,8 @@ export interface Pedido {
   estado: string;
   total: Numerico;
   creado_en: Date;
+  /** Usuario que lo creó; null si lo hizo un visitante sin sesión. */
+  usuario_id: number | null;
 }
 
 /** Fila de `pedido_items` con el nombre del producto. */

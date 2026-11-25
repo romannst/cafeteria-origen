@@ -1,60 +1,56 @@
 import express from 'express';
 import * as usuarios from '../services/usuarios.service';
-import { crearSesion, destruirSesion, obtenerSesion } from '../middleware/sesion';
+import {
+  borrarCookieSesion,
+  crearSesion,
+  destruirSesion,
+  obtenerSesion,
+} from '../middleware/sesion';
+import { limiteLoginPorCuenta, limiteLoginPorIp } from '../middleware/limites';
 
 const router = express.Router();
+
+/** Una única respuesta para cualquier credencial que no sirva. */
+const CREDENCIALES_INVALIDAS = 'Usuario o contraseña incorrectos.';
+
+// Las respuestas con datos de la sesión no se guardan en cachés.
+router.use((req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  next();
+});
 
 /**
  * Inicio de sesión.
  *
- * FALLAS:
- *  - Inyección SQL en la verificación de credenciales (ver usuarios.service).
- *  - Contraseñas almacenadas en texto plano.
- *  - Mensajes de error que distinguen "usuario inexistente" de "contraseña
- *    incorrecta" → enumeración de usuarios.
- *  - Sin rate limiting ni bloqueo: fuerza bruta ilimitada.
- *  - El identificador de sesión no se regenera (fijación de sesión).
+ * CORREGIDO:
+ *  - Verificación con consulta parametrizada + bcrypt (ver usuarios.service).
+ *  - Mensaje genérico: no revela si la cuenta existe.
+ *  - Límite de intentos fallidos por IP y por cuenta.
+ *  - Se genera un identificador de sesión nuevo en cada login.
  */
-router.post('/login', async (req, res, next) => {
+router.post('/login', limiteLoginPorIp, limiteLoginPorCuenta, async (req, res, next) => {
   try {
     const { username, password } = req.body || {};
 
-    if (!username || !password) {
+    // El tipo se comprueba: el cuerpo podría traer un objeto o un arreglo.
+    if (typeof username !== 'string' || typeof password !== 'string' || !username || !password) {
       return res.status(400).json({ error: 'Falta usuario o contraseña.' });
     }
 
-    // La verificación de credenciales es la consulta concatenada (SQLi).
     const usuario = await usuarios.autenticar(username, password);
-
     if (!usuario) {
-      // FALLA — Enumeración de usuarios: el mensaje distingue entre
-      // "no existe" y "contraseña incorrecta", lo que permite a un atacante
-      // averiguar qué cuentas hay en el sistema.
-      const existe = await usuarios.buscarPorUsername(username);
-      if (existe) {
-        return res.status(401).json({ error: 'La contraseña es incorrecta.' });
-      }
-      return res
-        .status(401)
-        .json({ error: `El usuario "${username}" no existe en el sistema.` });
+      return res.status(401).json({ error: CREDENCIALES_INVALIDAS });
     }
 
-    crearSesion(req, res, {
+    const datos = {
       id: usuario.id,
       username: usuario.username,
       rol: usuario.rol,
       nombre: usuario.nombre,
-    });
+    };
+    crearSesion(req, res, datos);
 
-    res.json({
-      mensaje: `¡Bienvenido, ${usuario.nombre}!`,
-      usuario: {
-        id: usuario.id,
-        username: usuario.username,
-        rol: usuario.rol,
-        nombre: usuario.nombre,
-      },
-    });
+    res.json({ mensaje: `¡Bienvenido, ${usuario.nombre}!`, usuario: datos });
   } catch (err) {
     next(err);
   }
@@ -63,11 +59,12 @@ router.post('/login', async (req, res, next) => {
 /**
  * Cierre de sesión.
  *
- * FALLA: sólo borra la cookie del navegador. La sesión sigue existiendo en el
- * servidor, así que con la cookie robada se puede seguir usando.
+ * CORREGIDO: la sesión se elimina del servidor (una copia de la cookie deja de
+ * servir) y además se borra la cookie del navegador.
  */
 router.post('/logout', (req, res) => {
-  res.clearCookie('sid', { path: '/' });
+  destruirSesion(req);
+  borrarCookieSesion(res);
   res.json({ mensaje: 'Sesión cerrada.' });
 });
 

@@ -1,32 +1,40 @@
 /**
  * Manejo de errores.
  *
- * FALLA — Exposición de información sensible:
- * la respuesta al cliente incluye el mensaje de error original y el stack
- * trace completo, que revela rutas internas del servidor, nombres de tablas,
- * fragmentos de consultas SQL y versiones de librerías.
- *
- * Corrección: responder con un mensaje genérico ("Error interno") y registrar
- * el detalle real en el log del servidor.
+ * CORREGIDO — Exposición de información sensible y XSS reflejado: el cliente
+ * recibe mensajes fijos. No se devuelve el stack trace, el mensaje interno
+ * (que puede nombrar tablas, rutas o consultas) ni la URL pedida. El detalle
+ * real queda en el log del servidor.
  */
 
 import type { NextFunction, Request, Response } from 'express';
 
 import type { ErrorHttp } from '../tipos';
 
+/** Mensajes para los errores atribuibles a la petición. */
+const MENSAJES: Record<number, string> = {
+  400: 'La solicitud no es válida.',
+  413: 'La solicitud es demasiado grande.',
+  415: 'El formato enviado no está admitido.',
+};
+
 export function rutaNoEncontrada(req: Request, res: Response): void {
-  res.status(404).json({ error: `Ruta no encontrada: ${req.originalUrl}` });
+  res.status(404).json({ error: 'Ruta no encontrada.' });
 }
 
 // Express reconoce al manejador de errores por sus CUATRO parámetros: `next`
-// tiene que estar aunque no se use.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+// tiene que estar aunque no siempre se use.
 export function manejadorErrores(err: ErrorHttp, req: Request, res: Response, next: NextFunction): void {
-  console.error('[error]', err.message);
+  const pedido = err.status ?? 500;
+  const estado = pedido >= 400 && pedido < 500 ? pedido : 500;
 
-  // FALLA: se filtra el stack trace al cliente.
-  res.status(err.status || 500).json({
-    error: err.message,
-    stack: err.stack,
-  });
+  // El stack va sólo al log. En errores del cliente no se registra el mensaje,
+  // porque puede repetir parte del cuerpo enviado (incluida una contraseña).
+  console.error('[error]', estado, req.method, req.path, estado === 500 ? err.stack : err.name);
+
+  // Si la respuesta ya empezó a enviarse, Express cierra la conexión.
+  if (res.headersSent) return next(err);
+
+  const mensaje = estado === 500 ? 'Error interno del servidor.' : MENSAJES[estado] ?? MENSAJES[400];
+  res.status(estado).json({ error: mensaje });
 }
