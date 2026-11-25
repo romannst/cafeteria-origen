@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto';
 import * as db from './db';
 import { CATALOGO } from './catalogo';
 import { esHash, hashPassword, problemaDePassword } from './passwords';
@@ -5,7 +6,6 @@ import type { Rol } from './tipos';
 
 interface UsuarioInicial {
   username: string;
-  password: string;
   rol: Rol;
   nombre: string;
 }
@@ -17,54 +17,32 @@ interface UsuarioInicial {
  * guardan con bcrypt (salt por usuario). Las filas que una versión anterior
  * dejó en texto plano se convierten a hash en cada arranque.
  *
- * Las contraseñas de abajo son de DEMOSTRACIÓN y sólo se usan fuera de
- * producción. Con NODE_ENV=production una cuenta inicial se crea únicamente
- * si se define CLAVE_INICIAL_<USUARIO> (por ejemplo CLAVE_INICIAL_VALENTINA).
+ * CORREGIDO — Credenciales de fábrica: el código no contiene contraseñas. La
+ * de cada cuenta inicial sale de CLAVE_INICIAL_<USUARIO> (por ejemplo
+ * CLAVE_INICIAL_VALENTINA). Si no está definida, fuera de producción se genera
+ * una aleatoria y se muestra una sola vez en el log, al crear la cuenta; en
+ * producción la cuenta no se crea.
  */
 
 export const USUARIOS_INICIALES: UsuarioInicial[] = [
-  {
-    username: 'admin',
-    password: 'admin',
-    rol: 'admin',
-    nombre: 'Administración',
-  },
-  {
-    username: 'valentina',
-    password: 'origen2024',
-    rol: 'admin',
-    nombre: 'Valentina',
-  },
-  {
-    username: 'barista',
-    password: 'cafe123',
-    rol: 'barista',
-    nombre: 'Barista',
-  },
-  {
-    username: 'mozo',
-    password: 'mozo123',
-    rol: 'mozo',
-    nombre: 'Mozo de sala',
-  },
-  {
-    username: 'cliente',
-    password: 'cliente',
-    rol: 'cliente',
-    nombre: 'Cliente',
-  },
+  { username: 'admin', rol: 'admin', nombre: 'Administración' },
+  { username: 'valentina', rol: 'admin', nombre: 'Valentina' },
+  { username: 'barista', rol: 'barista', nombre: 'Barista' },
+  { username: 'mozo', rol: 'mozo', nombre: 'Mozo de sala' },
+  { username: 'cliente', rol: 'cliente', nombre: 'Cliente' },
 ];
 
 /** Contraseña con la que se crea una cuenta inicial, o null si no se debe crear. */
-function passwordInicial(usuario: UsuarioInicial): string | null {
-  const configurada = process.env[`CLAVE_INICIAL_${usuario.username.toUpperCase()}`];
+function passwordInicial(username: string): { clave: string; generada: boolean } | null {
+  const configurada = process.env[`CLAVE_INICIAL_${username.toUpperCase()}`];
   if (configurada) {
-    const problema = problemaDePassword(configurada, usuario.username);
-    if (!problema) return configurada;
-    console.warn(`[origen] no se crea "${usuario.username}": ${problema}`);
+    const problema = problemaDePassword(configurada, username);
+    if (!problema) return { clave: configurada, generada: false };
+    console.warn(`[origen] no se crea "${username}": ${problema}`);
     return null;
   }
-  return process.env.NODE_ENV === 'production' ? null : usuario.password;
+  if (process.env.NODE_ENV === 'production') return null;
+  return { clave: randomBytes(12).toString('base64url'), generada: true };
 }
 
 async function crearUsuariosIniciales(): Promise<void> {
@@ -75,15 +53,20 @@ async function crearUsuariosIniciales(): Promise<void> {
     // Si ya existe no se toca: no se pisa una contraseña que alguien cambió.
     if (rows.length > 0) continue;
 
-    const password = passwordInicial(usuario);
-    if (password === null) continue;
+    const inicial = passwordInicial(usuario.username);
+    if (inicial === null) continue;
 
-    await db.query(
+    const { rowCount } = await db.query(
       `INSERT INTO usuarios (username, password, rol, nombre)
        VALUES ($1, $2, $3, $4)
        ON CONFLICT (username) DO NOTHING`,
-      [usuario.username, await hashPassword(password), usuario.rol, usuario.nombre]
+      [usuario.username, await hashPassword(inicial.clave), usuario.rol, usuario.nombre]
     );
+    if (inicial.generada && rowCount === 1) {
+      console.log(
+        `[origen] cuenta "${usuario.username}" creada con la clave generada: ${inicial.clave}`
+      );
+    }
   }
 }
 
@@ -152,5 +135,6 @@ export async function inicializarBase(): Promise<void> {
     );
   }
 
+  // Va al final: si falla por permisos, usuarios y catálogo ya quedaron listos.
   await asegurarPropietarioDePedidos();
 }
