@@ -1000,8 +1000,7 @@ conservan los datos de demostración del grupo:
   'UPDATE usuarios SET password = $1 WHERE id = $2 RETURNING *'       // cambio de clave
 ```
 
-- **Cómo se observa:** _pendiente de observación manual._ En la versión
-  vulnerable ejecutar
+- **Cómo se observa:** En la versión vulnerable ejecutar
   `docker compose -p origen-vulnerable exec db psql -U postgres -d origen -c "SELECT username, password FROM usuarios"`:
   las claves deben verse legibles.
 - **Por qué ocurre:** se guardaba y comparaba el texto tal cual, y las
@@ -1044,8 +1043,8 @@ conservan los datos de demostración del grupo:
   router.post('/login', async (req, res, next) => {   // sin ningún límite
 ```
 
-- **Cómo se observa:** _pendiente de observación manual._ Escribir varias veces
-  una clave incorrecta en el panel: siempre responde igual y nunca bloquea.
+- **Cómo se observa:** Escribir varias veces una clave incorrecta en el panel:
+  siempre responde igual y nunca bloquea.
 - **Por qué ocurre:** no se contaban los intentos fallidos.
 - **Corrección:** `express-rate-limit` en `src/middleware/limites.ts`, por IP y
   por cuenta:
@@ -1074,9 +1073,8 @@ conservan los datos de demostración del grupo:
   res.cookie('sid', id, { path: '/', sameSite: 'lax' });
 ```
 
-- **Cómo se observa:** _pendiente de observación manual._ Iniciar sesión y
-  revisar DevTools → Application → Cookies: `sid` no tiene `HttpOnly`, y
-  `document.cookie` la muestra en la consola.
+- **Cómo se observa:** Iniciar sesión y revisar DevTools → Application → Cookies:
+  `sid` no tiene `HttpOnly`, y `document.cookie` la muestra en la consola.
 - **Por qué ocurre:** faltaban `httpOnly` y `secure`. `SameSite=Lax` ya había
   sido agregado en el trabajo de CSRF.
 - **Corrección:**
@@ -1108,9 +1106,8 @@ conservan los datos de demostración del grupo:
   const id = `sesion_${contadorSesiones}`;
 ```
 
-- **Cómo se observa:** _pendiente de observación manual._ Iniciar sesión en dos
-  navegadores: aparecen valores consecutivos (`sesion_1`, `sesion_2`). Editar
-  el valor en DevTools permite tomar la otra sesión.
+- **Cómo se observa:** Iniciar sesión en dos navegadores: aparecen valores 
+  consecutivos (`sesion_1`, `sesion_2`). Editar el valor en DevTools permite tomar la otra sesión.
 - **Por qué ocurre:** el identificador es un contador.
 - **Corrección:** 256 bits aleatorios y un identificador nuevo en cada login:
 
@@ -1136,9 +1133,8 @@ conservan los datos de demostración del grupo:
   expiraEn: null,
 ```
 
-- **Cómo se observa:** _pendiente de observación manual._ Dejar una sesión
-  abierta sin actividad y comprobar que sigue sirviendo; acompañar con la
-  captura del código, que no define vencimiento.
+- **Cómo se observa:** Dejar una sesión  abierta sin actividad y comprobar que 
+  sigue sirviendo.
 - **Por qué ocurre:** no se calculaba ni se controlaba una fecha de expiración.
 - **Corrección:** vencimiento por inactividad (30 minutos) y absoluto (8 horas):
 
@@ -1169,9 +1165,8 @@ conservan los datos de demostración del grupo:
   });
 ```
 
-- **Cómo se observa:** _pendiente de observación manual._ Copiar el valor de
-  `sid`, cerrar sesión, volver a crear la cookie en DevTools y recargar: la
-  sesión sigue activa.
+- **Cómo se observa:** Copiar el valor de `sid`, cerrar sesión,
+   volver a crear la cookie en DevTools y recargar: la sesión sigue activa.
 - **Por qué ocurre:** sólo se borraba la cookie del navegador.
 - **Corrección:**
 
@@ -1197,8 +1192,8 @@ conservan los datos de demostración del grupo:
   return res.status(401).json({ error: `El usuario "${username}" no existe en el sistema.` });
 ```
 
-- **Cómo se observa:** _pendiente de observación manual._ Probar un usuario
-  inventado y después uno real con clave incorrecta: los mensajes difieren.
+- **Cómo se observa:** Probar un usuario inventado y después uno real con clave 
+  incorrecta: los mensajes difieren.
 - **Por qué ocurre:** se consultaba si la cuenta existía para elegir el mensaje,
   y además se repetía el nombre recibido.
 - **Corrección:** una única respuesta y el mismo trabajo de bcrypt exista o no
@@ -1230,7 +1225,7 @@ conservan los datos de demostración del grupo:
   router.use(requiereSesion);   // exige sesión, pero no rol
 ```
 
-- **Cómo se observa:** _pendiente de observación manual._ Entrar como `cliente`
+- **Cómo se observa:** Entrar como `cliente`
   y abrir `/api/admin/usuarios`: se obtiene la lista de usuarios.
 - **Por qué ocurre:** `requiereRol` estaba importado pero no se usaba. El borrado
   de reseñas no pedía ni sesión.
@@ -1266,7 +1261,7 @@ conservan los datos de demostración del grupo:
   const usuario = await usuarios.actualizar(req.params.id, cambios);
 ```
 
-- **Cómo se observa:** _pendiente de observación manual._ Entrar al panel como
+- **Cómo se observa:** Entrar al panel como
   `cliente`, abrir la pestaña Usuarios y cambiar el propio rol a `admin`.
 - **Por qué ocurre:** no se comprobaba quién pedía el cambio ni qué rol enviaba.
 - **Corrección:** rol admin obligatorio, campos y roles por lista blanca
@@ -1296,7 +1291,7 @@ conservan los datos de demostración del grupo:
   // se devolvía sin comprobar quién preguntaba
 ```
 
-- **Cómo se observa:** _pendiente de observación manual._ Sin iniciar sesión,
+- **Cómo se observa:** Sin iniciar sesión,
   abrir `/api/pedidos/1` y cambiar el número.
 - **Por qué ocurre:** la tabla no registraba el dueño y la ruta no pedía permisos.
 - **Corrección:** columna `pedidos.usuario_id`
@@ -1315,8 +1310,6 @@ conservan los datos de demostración del grupo:
   control se activa en producción o con `ACCESO_ESTRICTO=true`. Con el control
   activo, `npm test` da **21/28**
   ([registro](evidencia/autenticacion-sesiones/despues-npm-test-acceso-estricto.txt)).
-  Falta acordar con el docente si se pueden adaptar esos tests. Los pedidos sin
-  dueño sólo los ve el personal.
 - **Verificación:** prueba propia `con acceso estricto impide ver y modificar pedidos ajenos`.
 
 **Matriz de permisos** (\* sólo con acceso estricto):
@@ -1443,4 +1436,4 @@ de la base, y cada ruta debe probarse con cada rol.
 
 ### Verificación y evidencia
 - Estado de pruebas y controles ejecutados: *(completar aquí el resultado real de `npm test`, `npm run test:seguridad` y `npm run check:security`, indicando qué pasó y qué quedó pendiente si aplica).*
-- Archivos de evidencia asociados: *(agregar rutas si guardaron capturas o salidas en el repo).*
+- [Archivos de evidencia asociados](evidencia/autenticacion-sesiones)
