@@ -811,10 +811,8 @@ En esta línea de base aún no se había ejecutado la batería completa de
 seguridad ni las verificaciones posteriores. El checklist ya marcaba `VAL-01`
 en verde por el control de ID
 incorporado por XSS; `CSRF-02` (cookie) depende del trabajo de sesiones y
-`VAL-06` (stack traces) del trabajo de configuración. Los logs iniciales de
-una ejecución anterior al pull se conservan fuera del repositorio en
-`D:\OpenCode\cafeteria-local\`; los archivos enlazados arriba corresponden
-únicamente a la ejecución sobre la base integrada.
+`VAL-06` (stack traces) del trabajo de configuración. Los archivos enlazados
+arriba corresponden a la ejecución sobre la base integrada.
 
 ### Verificación inicial después de las correcciones propias (histórica)
 
@@ -927,9 +925,7 @@ modifica sus resultados históricos.
 | `npm run check:security` | 37/37 controles críticos ✔; CSRF-01..04 y VAL-01..06 en verde |
 | `npm run typecheck` | Sin errores en el host y dentro del contenedor ✔ |
 
-Los registros de esta ejecución quedaron fuera del repositorio, en
-`C:\Users\Roman\AppData\Local\Temp\opencode\dev-2e72fd3-{npm-test,test-seguridad,test-todo}.txt`.
-También hay evidencia versionada de los resultados integrados de
+La evidencia versionada de los resultados integrados está en
 [tests funcionales](evidencia/xss/despues-npm-test.txt),
 [seguridad](evidencia/xss/despues-test-seguridad.txt) y
 [checklist](evidencia/xss/despues-check-security.txt). El 11/37 de arriba es
