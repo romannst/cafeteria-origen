@@ -1433,3 +1433,13 @@ de la base, y cada ruta debe probarse con cada rol.
 - **Manejo centralizado de errores (`src/middleware/errores.ts`):** Se registran los detalles del error internamente en el servidor mientras se devuelve una respuesta genérica y segura al cliente, manteniendo `manejadorErrores` al final del pipeline en `src/app.ts`.
 - **Cabeceras de seguridad y CSP (`src/app.ts`):** Se configuraron cabeceras de seguridad y `Content-Security-Policy` (y se deshabilitó `x-powered-by`), revisando compatibilidad con el frontend.
 - **Mínimos privilegios en PostgreSQL y endurecimiento Docker (`docker/initdb/02-usuario-aplicacion.sql`, `docker-compose.yml`, `Dockerfile`):** Se configuró el rol de aplicación (`origen_app`) con permisos acotados (`CONNECT`, `USAGE` en `public`, `SELECT`/`INSERT`/`UPDATE`/`DELETE` en tablas y `USAGE`/`SELECT` en secuencias), autenticación `scram-sha-256`, binding a `127.0.0.1` en `docker-compose.yml` y usuario no-root (`appuser`) en el `Dockerfile`.
+
+
+### Verificación
+
+En Docker, sobre el código integrado (`dev`): `npm test` 28/28,
+`npm run test:seguridad` 29/29 (incluye inyección de comandos, diagnóstico,
+stack traces, cabeceras de seguridad y usuario de la base) y
+`npm run check:security` 37/37, con CMD-01 a CMD-03 y CFG-01 a CFG-05 en verde.
+Evidencia: [check:security](evidencia/xss/despues-check-security.txt) ·
+[test:seguridad](evidencia/xss/despues-test-seguridad.txt).
