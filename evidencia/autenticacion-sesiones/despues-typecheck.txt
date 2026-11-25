@@ -1,0 +1,4 @@
+# Entorno: Node v22.23.5 y PostgreSQL 16 locales (sin Docker) - zip con las correcciones del Integrante 4 aplicadas
+# Comando: npx tsc --noEmit && echo 'Sin errores de tipos'  # tsconfig.json temporal: el zip no lo incluía
+
+Sin errores de tipos

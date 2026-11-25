@@ -1,0 +1,102 @@
+# Entorno: Node v22.23.5 y PostgreSQL 16 locales (sin Docker) - zip con las correcciones del Integrante 4 aplicadas
+# Comando: npm run check:security
+
+
+> cafeteria-origen@1.0.0 check:security
+> node --import tsx scripts/check-security.ts
+
+
+  CHECKLIST DE SEGURIDAD — CAFETERÍA ORIGEN
+  ────────────────────────────────────────────────────────────
+
+  INYECCIÓN SQL
+    ✘ SQLI-01   Ninguna consulta SQL interpola la entrada del usuario
+               → se encontró en src/services/catalogo.service.ts:40, src/services/reportes.service.ts:82
+                 src/services/catalogo.service.ts:40  ` AND tipo = '${
+                 src/services/reportes.service.ts:82  ` SELECT pr.variedad, pr.nombre, SUM(pi.cantidad) AS unidades, SUM(pi.cantidad * pi.precio
+               Qué hacer: No debe aparecer SQL con ${...} dentro. Usar consultas parametrizadas ($1, $2, ...) y valores por separado. Excepción: la lista de columnas de un UPDATE puede armarse con .join() si cada campo sale de una lista blanca.
+    ✔ SQLI-02   La capa de servicios usa consultas parametrizadas
+    ✘ SQLI-03   La base de datos no acepta conexiones sin contraseña
+               → se encontró en docker-compose.yml:29
+                 docker-compose.yml:29  POSTGRES_HOST_AUTH_METHOD: trust
+               Qué hacer: En docker-compose.yml no debe estar POSTGRES_HOST_AUTH_METHOD: trust (acepta cualquier conexión sin clave).
+    ✔ SQLI-04   El puerto de la base de datos no está publicado al host
+    ✘ SQLI-05   La aplicación no se conecta con el superusuario
+               → se encontró en docker-compose.yml:60
+                 docker-compose.yml:60  DB_USER: postgres
+               Qué hacer: DB_USER no debe ser "postgres". Usar el usuario de aplicación con permisos reducidos (origen_app).
+
+  XSS
+    ✔ XSS-01    El cliente no inyecta datos con innerHTML
+    ✔ XSS-02    Los mensajes de error del servidor no reflejan la entrada
+    ✘ XSS-03    Hay una Content Security Policy configurada
+               → no se encontró la implementación
+               Qué hacer: Configurar helmet con contentSecurityPolicy (script-src, object-src "none", etc.) como capa extra frente al XSS.
+    ✔ XSS-04    El contenido enviado por el usuario se acota en el servidor
+
+  CSRF
+    ✔ CSRF-01   Existe un token anti-CSRF
+    ✔ CSRF-02   La cookie de sesión usa SameSite
+    ✔ CSRF-03   Se verifica el origen de las peticiones que cambian estado
+    ✔ CSRF-04   Las operaciones que cambian estado no se hacen con GET
+
+  VALIDACIÓN DE ENTRADA
+    ✔ VAL-01    Los ids de las rutas se validan como enteros
+    ✔ VAL-02    Se validan tipo, longitud y rango de las entradas
+    ✔ VAL-03    Se usan listas blancas de valores permitidos
+    ✔ VAL-04    La carga de archivos valida la extensión
+    ✔ VAL-05    La carga de archivos limita el tamaño
+    ✔ VAL-06    No se filtran stack traces al cliente
+
+  AUTENTICACIÓN Y SESIONES
+    ✔ AUTH-01   Las contraseñas se hashean con bcrypt y salt
+    ✔ AUTH-02   La carga inicial de usuarios hashea las contraseñas
+    ✔ AUTH-03   El login compara la contraseña con bcrypt
+    ✔ AUTH-04   Hay protección contra fuerza bruta
+    ✔ AUTH-05   La cookie de sesión es HttpOnly
+    ✔ AUTH-06   La cookie de sesión es Secure y SameSite
+    ✔ AUTH-07   El identificador de sesión no es un contador
+    ✔ AUTH-08   El identificador de sesión es aleatorio
+    ✔ AUTH-09   Las sesiones tienen fecha de vencimiento
+    ✔ AUTH-10   La expiración de la sesión está calculada
+    ✔ AUTH-11   El logout invalida la sesión en el servidor
+    ✔ AUTH-12   Los mensajes de login son genéricos
+    ✔ AUTH-13   No hay credenciales triviales de fábrica
+    ✔ AUTH-14   Las rutas de administración exigen el rol admin
+    ✔ AUTH-15   El rol de un usuario no se acepta sin verificar
+
+  INYECCIÓN DE COMANDOS
+    ✘ CMD-01    No se ejecutan comandos con la entrada del usuario
+               → se encontró en src/routes/admin.routes.ts:227
+                 src/routes/admin.routes.ts:227  exec(
+               Qué hacer: No usar child_process.exec() con datos del usuario: usar spawn() con argumentos separados y shell: false.
+    ✘ CMD-02    El comando se ejecuta sin shell y con argumentos separados
+               → no se encontró la implementación
+               Qué hacer: Usar spawn("ping", ["-c", "3", host], { shell: false }).
+    ✘ CMD-03    El host se valida contra una lista blanca
+               → no se encontró la implementación
+               Qué hacer: Sólo se permite consultar a los servidores de proveedor conocidos: el resto se rechaza.
+
+  CONFIGURACIÓN
+    ✘ CFG-01    Se usan cabeceras de seguridad (helmet)
+               → no se encontró la implementación
+               Qué hacer: helmet ya está instalado: app.use(helmet({ contentSecurityPolicy: {...} })).
+    ✔ CFG-02    No hay secretos escritos en el código
+    ✘ CFG-03    El endpoint de diagnóstico está protegido
+               → no se encontró la implementación
+               Qué hacer: /api/_diagnostico no puede quedar abierto a cualquiera: debe exigir sesión (y rol admin) o eliminarse.
+    ✘ CFG-04    El diagnóstico no filtra variables de entorno
+               → se encontró en src/routes/debug.routes.ts:21
+                 src/routes/debug.routes.ts:21  process.env
+               Qué hacer: No devolver process.env completo ni credenciales en la respuesta.
+    ○ CFG-05    El contenedor no corre como root
+               → no se encontró Dockerfile para revisar
+               Qué hacer: Crear un usuario sin privilegios en el Dockerfile y usarlo con USER.
+
+  ────────────────────────────────────────────────────────────
+  ✘ Faltan 10 control(es) crítico(s): 27/37.
+  ○ 1 control(es) recomendado(s) pendientes.
+
+  Recordá: este script sólo analiza el código. No explotás nada,
+  observás los síntomas desde la interfaz y recién ahí corregís.
+
