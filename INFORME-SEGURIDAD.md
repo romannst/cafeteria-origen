@@ -875,7 +875,7 @@ Las adaptaciones a las pruebas de login y fuerza bruta permiten enviar
 token válido para que CSRF no oculte fallos de otros bloques. No se ejecutó
 la batería completa de seguridad ni la de fuerza bruta en este cierre.
 
-### Cierre local y dependencias de integración
+### Cierre local y dependencias de integración (histórico)
 
 Se completó la implementación propia de CSRF, validación de pedidos y
 reseñas, y restricciones de subida. Se documentaron los siguientes resultados:
@@ -896,7 +896,7 @@ Las capturas y los registros automáticos están enlazados en las secciones
 anteriores. Los logs `despues-*` se conservan como registro histórico;
 los logs `cierre-*` corresponden a la revisión final de la lista de tareas.
 
-Quedan como dependencias explícitas para la integración:
+En ese cierre local quedaban como dependencias explícitas para la integración:
 
 - **Sesiones:** integrar el ciclo de vida y limpieza de tokens con la
   rotación/expiración e invalidación de sesiones. El token obligatorio en
@@ -909,8 +909,37 @@ Quedan como dependencias explícitas para la integración:
   la parametrización de consultas.
 - **Verificación integrada:** comprobar las operaciones del sitio y del
   panel afectadas por los cambios compartidos y volver a evaluar el checklist
-  global después de integrarlos. Su último resultado registrado es 11/37,
-  por lo que no se declara aprobado el proyecto completo.
+  global después de integrarlos. En ese momento el último resultado registrado
+  era 11/37, por lo que entonces no se declaró aprobado el proyecto completo.
+
+### Verificación integrada posterior
+
+Sobre `dev` (`2e72fd3`), se repitieron las pruebas con una imagen Docker nueva,
+PostgreSQL y subidas temporales aislados, sin usar el volumen ni los archivos
+de demostración. Esta ejecución es posterior a los registros `cierre-*` y no
+modifica sus resultados históricos.
+
+| Verificación | Resultado |
+|---|---|
+| `npm test` | 28/28 ✔ |
+| `npm run test:seguridad` | 29/29 ✔; incluye CSRF 1/1 y Validación de entrada 4/4 |
+| `npm run test:todo` | 86/86 ✔; incluye las regresiones propias y las de los demás bloques |
+| `npm run check:security` | 37/37 controles críticos ✔; CSRF-01..04 y VAL-01..06 en verde |
+| `npm run typecheck` | Sin errores en el host y dentro del contenedor ✔ |
+
+Los registros de esta ejecución quedaron fuera del repositorio, en
+`C:\Users\Roman\AppData\Local\Temp\opencode\dev-2e72fd3-{npm-test,test-seguridad,test-todo}.txt`.
+También hay evidencia versionada de los resultados integrados de
+[tests funcionales](evidencia/xss/despues-npm-test.txt),
+[seguridad](evidencia/xss/despues-test-seguridad.txt) y
+[checklist](evidencia/xss/despues-check-security.txt). El 11/37 de arriba es
+histórico, no el estado actual de `dev`.
+
+Las pruebas aisladas no verifican el despliegue actualizado sobre la base
+habitual de demostración. La limpieza en memoria de tokens CSRF abandonados
+y la bandera `Secure` de `csrf_visitante` siguen señaladas como limitaciones
+de integración en la sección de sesiones; el 37/37 del checklist no
+equivale a una auditoría de producción.
 
 ### Reflexión · Práctica 3: CSRF
 
