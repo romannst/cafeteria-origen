@@ -1,7 +1,11 @@
 import express from 'express';
 import * as reportes from '../services/reportes.service';
+import { requiereRol, requiereSesion, soloEstricto, ROLES_ADMIN } from '../middleware/auth';
 
 const router = express.Router();
+
+// La facturación es información del negocio: con acceso estricto, sólo admin.
+router.use(soloEstricto(requiereSesion), soloEstricto(requiereRol(...ROLES_ADMIN)));
 
 /** GET /api/reportes/facturacion — cuánto se facturó. */
 router.get('/facturacion', async (req, res, next) => {
@@ -43,7 +47,6 @@ router.get('/ticket-promedio', async (req, res, next) => {
  * GET /api/reportes/ventas-por-variedad?variedad=
  *
  * FALLA — Inyección SQL: el origen se concatena en la consulta.
- * No se exige autenticación ni rol para ver la facturación.
  */
 router.get('/ventas-por-variedad', async (req, res, next) => {
   try {

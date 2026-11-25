@@ -1,6 +1,7 @@
 import express from 'express';
 import * as comentarios from '../services/comentarios.service';
 import { comentarioValido } from '../validacion';
+import { requiereSesion, requiereRol, ROLES_ADMIN } from '../middleware/auth';
 
 const router = express.Router();
 
@@ -40,10 +41,9 @@ router.post('/', async (req, res, next) => {
   }
 });
 
-/** DELETE /api/comentarios/:id */
-router.delete('/:id', async (req, res, next) => {
+/** DELETE /api/comentarios/:id — sólo administradores. */
+router.delete('/:id', requiereSesion, requiereRol(...ROLES_ADMIN), async (req, res, next) => {
   try {
-    // FALLA: sin verificación de rol — cualquiera puede borrar reseñas.
     const comentario = await comentarios.eliminar(req.params.id);
     if (!comentario) {
       return res.status(404).json({ error: 'Comentario no encontrado.' });
