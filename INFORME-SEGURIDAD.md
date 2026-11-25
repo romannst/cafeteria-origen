@@ -1,188 +1,3 @@
-# Informe de seguridad — Cafetería Origen (Grupo 04)
-
-Informe del TP4 de Programación IV. Cada sección documenta, por falla: qué es,
-dónde está, cómo se observa, por qué ocurre, cómo se corrige, decisiones
-tomadas y cómo se verifica.
-
-La evidencia de los tests (salida real, antes y después) está en
-[`evidencia/`](evidencia/).
-
-> Cada integrante agrega su sección al final de este archivo, con el mismo formato.
-
----
-
-## Inyección SQL (SQL Injection)
-
-**Responsable:** Ramos, Nikolás (Integrante 1)
-**Fallas:** VUL-01, VUL-02, VUL-03, VUL-04 · **OWASP:** A03:2021 — Injection
-
-### Qué es y por qué importa
-
-La inyección SQL ocurre cuando datos que controla un usuario se concatenan
-directamente en la cadena de una consulta SQL en lugar de enviarse como
-parámetros separados. El motor de base de datos (PostgreSQL) no distingue si
-las comillas o los operadores los escribió el desarrollador o un atacante: si
-forman parte de la consulta, se interpretan como instrucciones SQL (permitiendo
-eludir controles de acceso, alterar filtros o leer información de otras tablas).
-
-En el proyecto aparecían distintos vectores de inyección:
-
-| Tipo | Cómo se explota en la aplicación | 
-| ----- | ----- | 
-| **Bypass de autenticación** | Alterar la condición `WHERE` en el login para ingresar sin conocer la contraseña. | 
-| **Inyección en filtros dinámicos** | Manipular cláusulas `AND` o `WHERE` para ampliar los resultados devueltos. | 
-| **Inyección basada en `UNION`** | Anexar consultas sobre otras tablas (`usuarios`) para exfiltrar datos sensibles. | 
-
-### Causa común
-
-En las capas de servicio del proyecto (`usuarios.service.ts`,
-`catalogo.service.ts`, `pedidos.service.ts` y `reportes.service.ts`) se
-construían las sentencias SQL concatenando variables de entrada mediante
-template strings (`${...}`), confiando en que los valores recibidos no
-contendrían caracteres especiales de SQL.
-
----
-
-### VUL-01 · Inyección SQL en el login
-
-- **Dónde:** `src/services/usuarios.service.ts` (línea 42).
-- **Código vulnerable:**
-
-  ```js
-  const sql = `SELECT * FROM usuarios WHERE username = '${username}' AND password = '${password}'`;
-  const { rows } = await db.query(sql);
-  ```
-
-- **Cómo se observó:** en el formulario de login del panel se ingresó el
-  usuario `' OR 1=1 --` con cualquier contraseña y el sistema permitió ingresar
-  como `admin`. También se verificó con `admin'--` para acceder sin contraseña.
-- **Por qué ocurre:** `username` y `password` se concatenan directamente al
-  texto SQL, permitiendo que las comillas cierren la cadena y modifiquen la
-  lógica del `WHERE`.
-- **Corrección:** se parametrizan las consultas con marcadores posicionales
-  (`$1`) y se verifica la contraseña mediante hashing (`bcrypt.compare`) en
-  lugar de compararla en texto plano:
-
-  ```js
-  const { rows } = await db.query('SELECT * FROM usuarios WHERE username = $1', [username]);
-  const usuario = rows[0];
-  if (!usuario) return null;
-  const coincide = await bcrypt.compare(password, usuario.password);
-  return coincide ? usuario : null;
-  ```
-
-- **Verificación manual:** los payloads de bypass en el login dejan de
-  autenticar sin credenciales válidas y se tratan como cadenas literales.
-- **Decisiones:** parametrizar la consulta debe ir acompañado de `bcrypt.compare`
-  (control **AUTH-03**), ya que mantener contraseñas en texto plano en la base
-  de datos (VUL-13) sigue exponiendo las cuentas ante cualquier filtración.
-
----
-
-### VUL-02 · Inyección SQL en los filtros del catálogo
-
-* **Dónde:** `src/services/catalogo.service.ts` (líneas 40–43 y también en `obtener(id)`).
-
-* **Código vulnerable:**
-
-  ```ts
-  if (tipo) sql += ` AND tipo = '${tipo}'`;
-  if (variedad) sql += ` AND variedad = '${variedad}'`;
-  if (q) sql += ` AND (nombre ILIKE '%${q}%' OR descripcion ILIKE '%${q}%')`;
-  ```
-
-* **Cómo se observó:** en el buscador del menú se escribió `q = ' OR '1'='1` (o
-  `' OR 1=1 --`) y la API devolvió los 20 productos del catálogo completo en
-  lugar de acotar los resultados.
-
-* **Por qué ocurre:** los parámetros `tipo`, `variedad` y `q` (además de `id`
-  en `obtener`) se concatenan directamente en el SQL dinámico sin escapar ni
-  parametrizar.
-
-* **Corrección:** construir la consulta de forma parametrizada (`$1`, `$2`, …)
-  acumulando las condiciones y enviando los valores en un arreglo de parámetros
-  separado de la sentencia SQL, y parametrizar/validar también el `id` en
-  `obtener`:
-
-  ```ts
-  const condiciones: string[] = ['activo = true'];
-  const params: unknown[] = [];
-
-  if (tipo) {
-    params.push(tipo);
-    condiciones.push(`tipo = $${params.length}`);
-  }
-  if (variedad) {
-    params.push(variedad);
-    condiciones.push(`variedad = $${params.length}`);
-  }
-  if (q) {
-    params.push(`%${q}%`);
-    condiciones.push(`(nombre ILIKE $${params.length} OR descripcion ILIKE $${params.length})`);
-  }
-
-  const sql = `SELECT * FROM productos WHERE ${condiciones.join(' AND ')} ORDER BY tipo, variedad NULLS FIRST, id`;
-  const { rows } = await db.query<Producto>(sql, params);
-  ```
-
-* **Verificación manual:** al buscar `' OR '1'='1` en el catálogo, el motor lo
-  evalúa como texto literal dentro de `ILIKE` y devuelve 0 coincidencias sin
-  alterar la consulta.
-
-* **Observación:** esta falla también provocaba que payloads de XSS con
-  comillas simples (como `alert('XSS')` en VUL-05) rompieran la sintaxis SQL y
-  expusieran errores de PostgreSQL antes de llegar al frontend. Asimismo, se
-  corrigió la concatenación directa en `obtener(id)` parametrizando el `id` y
-  validando que sea un entero positivo.
-
----
-
-### VUL-03 · Inyección SQL en el filtro por mesa y validación en creación de pedidos
-
-- **Dónde:** `src/services/pedidos.service.ts` (`listar` y `crear`).
-
-- **Código vulnerable:**
-
-  ```ts
-  if (mesa) sql += ` WHERE mesa = '${mesa}'`;
-  ```
-
-* **Cómo se observó:** al realizar la petición `GET /api/pedidos?mesa=' OR '1'='1`
-  la consulta devolvía los pedidos de **todas** las mesas en lugar de filtrar
-  únicamente por la mesa solicitada.
-
-* **Por qué ocurre:** el parámetro `mesa` se concatena directamente en la
-  cláusula `WHERE` sin parametrización.
-
-* **Corrección:** reemplazar la interpolación por un parámetro vinculado
-  (`WHERE mesa = $1`) pasando `[mesa]` como arreglo de parámetros a `db.query`:
-
-  ```ts
-  const params: unknown[] = [];
-  let sql = 'SELECT * FROM pedidos';
-
-  if (mesa) {
-    params.push(mesa);
-    sql += ` WHERE mesa = $${params.length}`;
-  }
-
-  sql += ' ORDER BY id DESC';
-  const { rows } = await db.query(sql, params);
-  ```
-
-* **Verificación manual:** la petición con `' OR '1'='1` ya no amplía el
-  resultado y devuelve una lista vacía al no existir una mesa con ese nombre
-  literal.
-
----
-
-### VUL-04 · Inyección SQL vía `UNION` en reporte de ventas por origen
-
-* **Dónde:** `src/services/reportes.service.ts` (`ventasPorVariedad`).
-
-* **Código vulnerable:**
-
-  ```ts
   const sql = `
     SELECT pr.variedad, pr.nombre, SUM(pi.cantidad) AS unidades,
            SUM(pi.cantidad * pi.precio_unitario) AS total
@@ -206,7 +21,7 @@ contendrían caracteres especiales de SQL.
   validar previamente el parámetro contra una **lista blanca** de orígenes
   permitidos (`Brasil`, `Colombia`, `Etiopía`):
 
-  ```ts
+```ts
   const VARIEDADES_PERMITIDAS = ['Brasil', 'Colombia', 'Etiopía'];
 
   if (!VARIEDADES_PERMITIDAS.includes(variedad)) {
@@ -222,7 +37,7 @@ contendrían caracteres especiales de SQL.
     ORDER BY total DESC
   `;
   const { rows } = await db.query(sql, [variedad]);
-  ```
+```
 
 * **Decisiones:** combinar la consulta parametrizada con validación por lista
   blanca aplica **defensa en profundidad**, rechazando valores fuera de dominio
@@ -304,9 +119,9 @@ lo insertaba con `innerHTML`. Existía una función `raw()` que devolvía el val
 - **Dónde:** `src/public/js/app.js`, función `renderResultado` (línea 130 original).
 - **Código vulnerable:**
 
-  ```js
+```js
   el.innerHTML = 'Resultados para <strong>' + filtros.q + '</strong> — ' + total + ' producto(s)';
-  ```
+```
 
 - **Cómo se observó:** en el buscador del menú se escribió
   `<img src=x onerror=alert(1)>` y el navegador ejecutaba el `alert`.
@@ -315,13 +130,13 @@ lo insertaba con `innerHTML`. Existía una función `raw()` que devolvía el val
 - **Corrección:** el `<strong>` se crea como nodo y el texto se asigna con
   `textContent`:
 
-  ```js
+```js
   el.replaceChildren(
     'Resultados para ',
     crearEl('strong', null, filtros.q),
     ' — ' + total + ' producto(s)'
   );
-  ```
+```
 
 - **Verificación manual:** el mismo payload ahora se muestra literalmente
   (_Resultados para **<img src=x onerror=alert(1)>** — 0 producto(s)_), sin alert.
@@ -338,10 +153,10 @@ lo insertaba con `innerHTML`. Existía una función `raw()` que devolvía el val
   - `src/routes/auth.routes.ts`, login con usuario inexistente (línea 39 original).
 - **Código vulnerable:**
 
-  ```ts
+```ts
   .json({ error: `No existe el producto "${req.params.id}".` });
   .json({ error: `El usuario "${username}" no existe en el sistema.` });
-  ```
+```
 
 - **Cómo se observó:**
   - `GET /api/productos/<script>alert(1)</script>` devolvía el `<script>` en la
@@ -354,7 +169,7 @@ lo insertaba con `innerHTML`. Existía una función `raw()` que devolvía el val
 - **Corrección en `productos.routes.ts`:** se valida que el id sea un entero
   positivo **antes** de consultar la base, y el mensaje es genérico:
 
-  ```ts
+```ts
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) {
     return res.status(404).json({ error: 'Producto no encontrado.' });
@@ -363,7 +178,7 @@ lo insertaba con `innerHTML`. Existía una función `raw()` que devolvía el val
   if (!producto) {
     return res.status(404).json({ error: 'Producto no encontrado.' });
   }
-  ```
+```
 
 - **Corrección en `auth.routes.ts`:** _pendiente._ Se resuelve con un único
   mensaje genérico (`'Usuario o contraseña incorrectos.'`), que corrige a la vez
@@ -384,11 +199,11 @@ lo insertaba con `innerHTML`. Existía una función `raw()` que devolvía el val
 - **Dónde:** `src/public/js/app.js`, función `cargarReseñas` (línea 259 original).
 - **Código vulnerable:**
 
-  ```js
+```js
   cont.innerHTML = resp.data.comentarios.map(function (c) {
     return '<article class="review">' + ... + raw(c.autor) + ... + raw(c.texto) + ...;
   }).join('');
-  ```
+```
 
 - **Cómo se observó:** se publicó una reseña con el texto
   `<script>alert('XSS almacenado')</script>`. Queda guardada en la base, así que
@@ -397,7 +212,7 @@ lo insertaba con `innerHTML`. Existía una función `raw()` que devolvía el val
   cualquier visitante) y se insertan con `innerHTML`.
 - **Corrección:** cada reseña se construye nodo por nodo con `textContent`:
 
-  ```js
+```js
   var cabecera = crearEl('div', 'review-head');
   cabecera.append(
     crearEl('span', 'review-author', c.autor),
@@ -405,7 +220,7 @@ lo insertaba con `innerHTML`. Existía una función `raw()` que devolvía el val
   );
   var articulo = crearEl('article', 'review');
   articulo.append(cabecera, crearEl('p', 'review-text', c.texto));
-  ```
+```
 
 - **Decisiones:** la calificación se limita a un entero entre 0 y 5 antes de
   dibujar las estrellas, para no depender de que el servidor la valide.
@@ -419,10 +234,10 @@ lo insertaba con `innerHTML`. Existía una función `raw()` que devolvía el val
 - **Dónde:** `src/public/js/admin.js`, función `init` (línea 427 original).
 - **Código vulnerable:**
 
-  ```js
+```js
   var objetivo = params.get('vista');
   if (objetivo) { $('#panel-bienvenida').innerHTML = 'Panel ' + objetivo; }
-  ```
+```
 
 - **Cómo se observó:** abrir
   `http://localhost:8090/admin.html?vista=<img src=x onerror=alert('DOM')>`
@@ -431,13 +246,13 @@ lo insertaba con `innerHTML`. Existía una función `raw()` que devolvía el val
 - **Corrección:** el valor se valida contra una **lista blanca** de vistas y se
   muestra con `textContent`; cualquier otro valor se ignora:
 
-  ```js
+```js
   var VISTAS = ['resumen', 'pedidos', 'productos', 'reportes', 'usuarios', 'herramientas'];
   var objetivo = new URLSearchParams(window.location.search).get('vista');
   if (objetivo && VISTAS.indexOf(objetivo) !== -1) {
     $('#panel-bienvenida').textContent = 'Panel ' + objetivo;
   }
-  ```
+```
 
 - **Verificación manual:** con el mismo link no se ejecuta nada.
 
@@ -925,23 +740,485 @@ legítimos siguen funcionando. Se distinguen las capturas, los resultados
 manuales sin captura y las pruebas automáticas para no atribuir a cada
 evidencia más alcance del que tiene.
 
+---
 
-## Configuración / Inyección de comandos
+## Autenticación, sesiones y autorización
 
-### Hallazgos y riesgos abordados
-- **Inyección de comandos en diagnóstico de red (`src/routes/admin.routes.ts`):** El endpoint `POST /api/admin/probar-conexion` concatenaba el `host` recibido en `req.body` dentro de un comando `ping -c 3 ${host}` ejecutado mediante `exec`, permitiendo inyección de comandos del sistema operativo.
-- **Endpoint de diagnóstico / depuración (`src/routes/debug.routes.ts` y `src/app.ts`):** Exposición potencial de información interna/entorno o falta de control de acceso/habilitación condicional.
-- **Exposición de detalles internos en errores (`src/middleware/errores.ts`):** Riesgo de filtrar `stack` traces o información sensible en respuestas al cliente ante fallos.
-- **Cabeceras de seguridad y CSP (`src/app.ts`):** Falta de cabeceras como `X-Content-Type-Options`, `Referrer-Policy` y `Content-Security-Policy` (coordinado con frontend para no romper scripts/estilos/recursos).
-- **Base de datos y contenedores (`docker/initdb/02-usuario-aplicacion.sql`, `docker-compose.yml`, `Dockerfile`):** Uso de credenciales/autenticación débiles o de superusuario (`postgres`) en la app, publicación de puertos sin restringir a `127.0.0.1` y ejecución del proceso con privilegios de `root` en el contenedor.
+**Responsable:** Peralta, Julián
+**Fallas:** VUL-13 a VUL-21 e IDOR en pedidos · **OWASP:** A01:2021 — Broken Access Control, A02:2021 — Cryptographic Failures, A07:2021 — Identification and Authentication Failures
 
-### Correcciones aplicadas
-- **Validación por lista blanca y `spawn` sin shell (`src/routes/admin.routes.ts`):** Se valida que `host` sea string y pertenezca a `HOSTS_PERMITIDOS` (respondiendo `400` si no está permitido) y se ejecuta `ping` con `spawn('ping', ['-c', '3', host], { shell: false })`.
-- **Restricción de diagnóstico (`src/routes/debug.routes.ts` y `src/app.ts`):** Se protegió el endpoint de diagnóstico, se removió la exposición de datos sensibles del entorno y se condicionó su montaje según configuración.
-- **Manejo centralizado de errores (`src/middleware/errores.ts`):** Se registran los detalles del error internamente en el servidor mientras se devuelve una respuesta genérica y segura al cliente, manteniendo `manejadorErrores` al final del pipeline en `src/app.ts`.
-- **Cabeceras de seguridad y CSP (`src/app.ts`):** Se configuraron cabeceras de seguridad y `Content-Security-Policy` (y se deshabilitó `x-powered-by`), revisando compatibilidad con el frontend.
-- **Mínimos privilegios en PostgreSQL y endurecimiento Docker (`docker/initdb/02-usuario-aplicacion.sql`, `docker-compose.yml`, `Dockerfile`):** Se configuró el rol de aplicación (`origen_app`) con permisos acotados (`CONNECT`, `USAGE` en `public`, `SELECT`/`INSERT`/`UPDATE`/`DELETE` en tablas y `USAGE`/`SELECT` en secuencias), autenticación `scram-sha-256`, binding a `127.0.0.1` en `docker-compose.yml` y usuario no-root (`appuser`) en el `Dockerfile`.
+> Estado: implementación y pruebas automáticas realizadas sobre una copia local
+> del código (Node y PostgreSQL 16, **sin Docker**). **Quedan pendientes** la
+> observación manual de cada falla y la verificación en Docker sobre el código
+> integrado del grupo. El IDOR está corregido **sólo con acceso estricto**; en
+> la configuración Docker de desarrollo sigue abierto.
 
-### Verificación y evidencia
-- Estado de pruebas y controles ejecutados: *(completar aquí el resultado real de `npm test`, `npm run test:seguridad` y `npm run check:security`, indicando qué pasó y qué quedó pendiente si aplica).*
-- Archivos de evidencia asociados: *(agregar rutas si guardaron capturas o salidas en el repo).*
+### Qué es y por qué importa
+
+La **autenticación** comprueba quién es la persona; la **sesión** conserva esa
+identidad entre peticiones; la **autorización** decide qué puede hacer. Una
+falla en cualquiera de las tres permite usar la aplicación en nombre de otro o
+con más permisos de los que corresponden.
+
+| Problema | Consecuencia en la aplicación |
+| ----- | ----- |
+| **Credenciales mal protegidas** | Claves legibles en la base, intentos ilimitados y mensajes que revelan qué cuentas existen. |
+| **Sesiones débiles** | Identificadores adivinables, cookie legible desde JavaScript, sin vencimiento ni cierre real. |
+| **Control de acceso ausente** | Un cliente entra al panel, cambia roles y se pueden leer pedidos ajenos. |
+
+### Causa común
+
+El proyecto daba por hecho que el usuario sólo usaría la interfaz de la forma
+prevista: comparaba claves en texto plano, confiaba en cualquier cookie `sid`,
+exigía sesión sin comprobar el rol y no registraba de quién era cada pedido.
+
+Los números de línea de «Dónde» corresponden al código base recibido, antes de
+estas correcciones.
+
+### Cómo preparar la observación manual de la versión vulnerable
+
+La versión corregida convierte las claves a bcrypt, así que la versión
+vulnerable necesita su propia base. Estos pasos usan un volumen separado y
+conservan los datos de demostración del grupo:
+
+1. En la copia actual: `docker compose down` (**sin** `-v`).
+2. En una carpeta aparte con el commit inicial del proyecto:
+   `docker compose -p origen-vulnerable up -d --build`.
+3. Observar las fallas y guardar las capturas, tapando claves y cookies reales.
+4. En esa carpeta: `docker compose -p origen-vulnerable down -v`.
+5. En la copia actual: `docker compose up -d`.
+
+---
+
+### VUL-13 · Contraseñas en texto plano
+
+- **Dónde:** `src/inicializar.ts` (líneas 56–63), `src/services/usuarios.service.ts` (líneas 42, 49 y 76–82) y `POST /api/admin/cambiar-contrasena`.
+- **Código vulnerable:**
+
+```ts
+  [usuario.username, usuario.password, usuario.rol, usuario.nombre]   // carga inicial
+  'UPDATE usuarios SET password = $1 WHERE id = $2 RETURNING *'       // cambio de clave
+```
+
+- **Cómo se observa:** _pendiente de observación manual._ En la versión
+  vulnerable ejecutar
+  `docker compose -p origen-vulnerable exec db psql -U postgres -d origen -c "SELECT username, password FROM usuarios"`:
+  las claves deben verse legibles.
+- **Por qué ocurre:** se guardaba y comparaba el texto tal cual, y las
+  consultas con `SELECT *` y `RETURNING *` devolvían la columna `password`.
+- **Corrección:** hash bcrypt (costo 12, con salt por usuario) en la carga
+  inicial y en todo cambio; las filas antiguas en texto plano se convierten al
+  arrancar; las respuestas ya no incluyen el hash:
+
+```ts
+  for (const campo of COLUMNAS_PERMITIDAS) {
+    const valor = cambios[campo];
+    if (valor === undefined) continue;
+    valores.push(campo === 'password' ? await hashPassword(String(valor)) : valor);
+    campos.push(campo + ' = $' + valores.length);
+  }
+```
+
+  El cambio de la propia clave además exige la contraseña actual, limita los
+  intentos, cierra las otras sesiones y renueva la propia.
+- **Decisiones:**
+  - Claves nuevas de al menos 8 caracteres y como máximo 72 bytes (bcrypt
+    ignora lo que sobra), distintas del nombre de usuario.
+  - El código ya no contiene claves de fábrica (**AUTH-13**). Cada cuenta
+    inicial usa `CLAVE_INICIAL_<USUARIO>`; si falta, fuera de producción se
+    genera una al azar y se muestra una vez en el log. En producción no se crea.
+  - Una base existente conserva sus claves anteriores (hasheadas): las claves
+    débiles como `admin/admin` hay que cambiarlas.
+- **Verificación:** test `las contraseñas NO se guardan en texto plano`,
+  pruebas propias de migración y
+  [comprobación de migración y producción](evidencia/autenticacion-sesiones/despues-migracion-y-produccion.txt).
+
+---
+
+### VUL-14 · Sin protección contra fuerza bruta
+
+- **Dónde:** `src/routes/auth.routes.ts` (`POST /login`).
+- **Código vulnerable:**
+
+```ts
+  router.post('/login', async (req, res, next) => {   // sin ningún límite
+```
+
+- **Cómo se observa:** _pendiente de observación manual._ Escribir varias veces
+  una clave incorrecta en el panel: siempre responde igual y nunca bloquea.
+- **Por qué ocurre:** no se contaban los intentos fallidos.
+- **Corrección:** `express-rate-limit` en `src/middleware/limites.ts`, por IP y
+  por cuenta:
+
+```ts
+  router.post('/login', limiteLoginPorIp, limiteLoginPorCuenta, async (req, res, next) => {
+```
+
+- **Decisiones:**
+  - 5 fallos por cuenta y 20 por IP cada 15 minutos; los ingresos correctos no
+    cuentan. Superado el límite responde 429, también con la clave correcta.
+  - Se aplica igual a cuentas inexistentes, para no revelar cuáles existen.
+  - Costo asumido: alguien puede bloquear 15 minutos la cuenta de otro. Los
+    contadores están en memoria y varios clientes pueden compartir IP.
+- **Verificación:** bloque `Seguridad · Fuerza bruta` (2/2) y prueba propia de
+  bloqueo con cuenta existente e inexistente.
+
+---
+
+### VUL-15 · Cookie de sesión sin protección
+
+- **Dónde:** `src/middleware/sesion.ts` (línea 61).
+- **Código vulnerable:**
+
+```ts
+  res.cookie('sid', id, { path: '/', sameSite: 'lax' });
+```
+
+- **Cómo se observa:** _pendiente de observación manual._ Iniciar sesión y
+  revisar DevTools → Application → Cookies: `sid` no tiene `HttpOnly`, y
+  `document.cookie` la muestra en la consola.
+- **Por qué ocurre:** faltaban `httpOnly` y `secure`. `SameSite=Lax` ya había
+  sido agregado en el trabajo de CSRF.
+- **Corrección:**
+
+```ts
+  {
+    path: '/',
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+  }
+```
+
+- **Decisiones:** `Secure` se activa sólo en producción porque la práctica local
+  usa HTTP. El checklist es un análisis del código; el atributo en producción se
+  comprueba con una prueba propia.
+- **Verificación:** test `la cookie de sesión lleva HttpOnly, Secure y SameSite`
+  y prueba propia de cabecera en ambos entornos.
+
+---
+
+### VUL-16 · Identificador de sesión predecible
+
+- **Dónde:** `src/middleware/sesion.ts` (líneas 48–51).
+- **Código vulnerable:**
+
+```ts
+  contadorSesiones += 1;
+  const id = `sesion_${contadorSesiones}`;
+```
+
+- **Cómo se observa:** _pendiente de observación manual._ Iniciar sesión en dos
+  navegadores: aparecen valores consecutivos (`sesion_1`, `sesion_2`). Editar
+  el valor en DevTools permite tomar la otra sesión.
+- **Por qué ocurre:** el identificador es un contador.
+- **Corrección:** 256 bits aleatorios y un identificador nuevo en cada login:
+
+```ts
+  destruirSesion(req);                          // descarta la sesión anterior
+  const id = randomBytes(32).toString('hex');
+```
+
+- **Decisiones:** sólo valen identificadores creados por el servidor (contra la
+  fijación de sesión). Una cookie mal codificada se ignora en lugar de provocar
+  un error 500.
+- **Verificación:** test `el identificador de sesión es aleatorio y no predecible`
+  y prueba propia de rotación.
+
+---
+
+### VUL-17 · Sesiones que nunca expiran
+
+- **Dónde:** `src/middleware/sesion.ts` (línea 57).
+- **Código vulnerable:**
+
+```ts
+  expiraEn: null,
+```
+
+- **Cómo se observa:** _pendiente de observación manual._ Dejar una sesión
+  abierta sin actividad y comprobar que sigue sirviendo; acompañar con la
+  captura del código, que no define vencimiento.
+- **Por qué ocurre:** no se calculaba ni se controlaba una fecha de expiración.
+- **Corrección:** vencimiento por inactividad (30 minutos) y absoluto (8 horas):
+
+```ts
+  if (ahora >= sesion.expiraEn) {
+    sesiones.delete(id);
+    return null;
+  }
+  sesion.expiraEn = Math.min(ahora + TIEMPO_INACTIVIDAD, sesion.creadaEn + MAX_VIDA);
+```
+
+- **Decisiones:** las sesiones vencidas se limpian cada 5 minutos. Siguen en
+  memoria: reiniciar la app las cierra todas.
+- **Verificación:** pruebas propias de ambos vencimientos, simulando el reloj
+  (no se esperó el tiempo real).
+
+---
+
+### VUL-18 · Logout que no invalida la sesión
+
+- **Dónde:** `src/routes/auth.routes.ts` (líneas 69–72).
+- **Código vulnerable:**
+
+```ts
+  router.post('/logout', (req, res) => {
+    res.clearCookie('sid', { path: '/' });
+    res.json({ mensaje: 'Sesión cerrada.' });
+  });
+```
+
+- **Cómo se observa:** _pendiente de observación manual._ Copiar el valor de
+  `sid`, cerrar sesión, volver a crear la cookie en DevTools y recargar: la
+  sesión sigue activa.
+- **Por qué ocurre:** sólo se borraba la cookie del navegador.
+- **Corrección:**
+
+```ts
+  destruirSesion(req);        // borra la sesión del servidor
+  borrarCookieSesion(res);    // borra la cookie
+```
+
+- **Decisiones:** la cookie se borra con las mismas opciones con las que se creó.
+- **Verificación:** test `el logout invalida la sesión en el servidor`.
+
+---
+
+### VUL-19 · Enumeración de usuarios en el login
+
+- **Dónde:** `src/routes/auth.routes.ts` (líneas 29–40).
+- **Código vulnerable:**
+
+```ts
+  if (existe) {
+    return res.status(401).json({ error: 'La contraseña es incorrecta.' });
+  }
+  return res.status(401).json({ error: `El usuario "${username}" no existe en el sistema.` });
+```
+
+- **Cómo se observa:** _pendiente de observación manual._ Probar un usuario
+  inventado y después uno real con clave incorrecta: los mensajes difieren.
+- **Por qué ocurre:** se consultaba si la cuenta existía para elegir el mensaje,
+  y además se repetía el nombre recibido.
+- **Corrección:** una única respuesta y el mismo trabajo de bcrypt exista o no
+  el usuario:
+
+```ts
+  const coincide = await bcrypt.compare(password, hash ?? (await hashSenuelo));
+```
+
+```ts
+  return res.status(401).json({ error: 'Usuario o contraseña incorrectos.' });
+```
+
+- **Decisiones:** `username` y `password` deben ser texto. Esta corrección
+  resuelve también la parte de **VUL-06** que estaba pendiente en
+  `auth.routes.ts`.
+- **Verificación:** tests `los mensajes de login son genéricos` y
+  `el login NO devuelve HTML sin escapar en el mensaje de error`. La igualdad de
+  tiempos de respuesta no se midió.
+
+---
+
+### VUL-20 · Autorización ausente en el panel
+
+- **Dónde:** `src/routes/admin.routes.ts` (línea 34) y `DELETE /api/comentarios/:id`.
+- **Código vulnerable:**
+
+```ts
+  router.use(requiereSesion);   // exige sesión, pero no rol
+```
+
+- **Cómo se observa:** _pendiente de observación manual._ Entrar como `cliente`
+  y abrir `/api/admin/usuarios`: se obtiene la lista de usuarios.
+- **Por qué ocurre:** `requiereRol` estaba importado pero no se usaba. El borrado
+  de reseñas no pedía ni sesión.
+- **Corrección:**
+
+```ts
+  router.use(requiereSesion);
+  router.post('/cambiar-contrasena', limiteCambioPassword, /* ... */);
+  router.use(requiereRol(...ROLES_ADMIN));   // protege todo lo que sigue
+```
+
+```ts
+  router.delete('/:id', requiereSesion, requiereRol(...ROLES_ADMIN), /* ... */);
+```
+
+- **Decisiones:** el control va antes de las rutas, así las nuevas quedan
+  protegidas. Cada usuario autenticado puede cambiar su propia clave. El rol se
+  guarda en la sesión: los cambios hechos desde el panel la cierran, pero uno
+  hecho directamente en la base no se refleja hasta un nuevo ingreso.
+- **Verificación:** test `un usuario sin rol admin NO puede entrar al panel` y
+  pruebas propias con visitante, cliente, mozo y barista.
+
+---
+
+### VUL-21 · Escalada de privilegios
+
+- **Dónde:** `src/routes/admin.routes.ts` (líneas 57–74) y `actualizar` en `usuarios.service.ts`.
+- **Código vulnerable:**
+
+```ts
+  if (rol !== undefined) cambios.rol = rol;
+  // ...
+  const usuario = await usuarios.actualizar(req.params.id, cambios);
+```
+
+- **Cómo se observa:** _pendiente de observación manual._ Entrar al panel como
+  `cliente`, abrir la pestaña Usuarios y cambiar el propio rol a `admin`.
+- **Por qué ocurre:** no se comprobaba quién pedía el cambio ni qué rol enviaba.
+- **Corrección:** rol admin obligatorio, campos y roles por lista blanca
+  (`src/validacion-usuario.ts`) y prohibición de cambiar el propio rol:
+
+```ts
+  if (esPropio && cambios.rol !== undefined && cambios.rol !== yo.rol) {
+    return res.status(403).json({ error: 'No podés cambiar tu propio rol.' });
+  }
+```
+
+- **Decisiones:** el usuario modificado pierde sus sesiones abiertas. La clave
+  propia sólo se cambia por el endpoint que exige la actual.
+- **Verificación:** test `un usuario NO puede cambiar su propio rol a admin`.
+  En la línea de base ese test ya pasaba, por lo que no demuestra el control de
+  rol; las pruebas propias lo comprueban **con token CSRF válido** (403).
+
+---
+
+### IDOR · Acceso a pedidos ajenos (sin número en la lista)
+
+- **Dónde:** `src/routes/pedidos.routes.ts` (líneas 64–74) y `reportes.routes.ts`.
+- **Código vulnerable:**
+
+```ts
+  const pedido = await pedidos.obtenerConItems(req.params.id);
+  // se devolvía sin comprobar quién preguntaba
+```
+
+- **Cómo se observa:** _pendiente de observación manual._ Sin iniciar sesión,
+  abrir `/api/pedidos/1` y cambiar el número.
+- **Por qué ocurre:** la tabla no registraba el dueño y la ruta no pedía permisos.
+- **Corrección:** columna `pedidos.usuario_id`
+  (`docker/initdb/03-pedidos-propietario.sql`), dueño tomado de la sesión y
+  comprobación al consultar. Un pedido ajeno responde 404:
+
+```ts
+  const ajeno =
+    accesoEstricto() &&
+    !ROLES_PERSONAL.includes(req.usuario!.rol) &&
+    pedido?.usuario_id !== req.usuario!.id;
+```
+
+- **Decisiones — limitación importante:** los tests funcionales listan y
+  consultan pedidos, cambian estados y piden reportes **sin sesión**. Por eso el
+  control se activa en producción o con `ACCESO_ESTRICTO=true`. Con el control
+  activo, `npm test` da **21/28**
+  ([registro](evidencia/autenticacion-sesiones/despues-npm-test-acceso-estricto.txt)).
+  Falta acordar con el docente si se pueden adaptar esos tests. Los pedidos sin
+  dueño sólo los ve el personal.
+- **Verificación:** prueba propia `con acceso estricto impide ver y modificar pedidos ajenos`.
+
+**Matriz de permisos** (\* sólo con acceso estricto):
+
+| Operación | Visitante | Cliente | Barista / mozo | Admin |
+| ----- | :---: | :---: | :---: | :---: |
+| Catálogo, reseñas y crear pedido | sí | sí | sí | sí |
+| Cambiar la propia contraseña | no | sí | sí | sí |
+| Resto de `/api/admin` | no | no | no | sí |
+| Borrar reseñas | no | no | no | sí |
+| Ver pedidos \* | no | propios | todos | todos |
+| Cambiar estado de pedidos \* | no | no | sí | sí |
+| Ver reportes \* | no | no | no | sí |
+
+---
+
+### Verificación
+
+Resultados reales sobre la copia local. «Antes» es el código base recibido (que
+ya incluía los cambios de CSRF y validación); «después» suma las correcciones de
+esta sección y las de apoyo indicadas en las dependencias.
+
+| Prueba / Verificación | Antes | Después |
+| :--- | :---: | :---: |
+| `las contraseñas NO se guardan en texto plano` (VUL-13) | ✘ | ✔ |
+| `el login bloquea o limita los intentos repetidos` (VUL-14) | ✘ | ✔ |
+| `el login correcto sigue funcionando después de un bloqueo` (VUL-14) | ✔ | ✔ |
+| `la cookie de sesión lleva HttpOnly, Secure y SameSite` (VUL-15) | ✘ | ✔ |
+| `el identificador de sesión es aleatorio y no predecible` (VUL-16) | ✘ | ✔ |
+| `el logout invalida la sesión en el servidor` (VUL-18) | ✘ | ✔ |
+| `los mensajes de login son genéricos` (VUL-19) | ✘ | ✔ |
+| `el login NO devuelve HTML sin escapar en el mensaje de error` (VUL-06) | ✘ | ✔ |
+| `el login NO acepta el bypass con payload SQL` (VUL-01) | ✘ | ✔ |
+| `el login NO acepta el payload que comenta la contraseña` (VUL-01) | ✘ | ✔ |
+| `un usuario sin rol admin NO puede entrar al panel` (VUL-20) | ✘ | ✔ |
+| `un usuario NO puede cambiar su propio rol a admin` (VUL-21) | ✔ | ✔ |
+| Pruebas propias de sesiones y permisos | — | 12/12 ✔ |
+| `npm test` (funcionales, sin acceso estricto) | 28/28 ✔ | 28/28 ✔ |
+| Chequeo de tipos (`tsconfig.json` temporal) | sin errores | sin errores |
+| Checklist `AUTH` (controles críticos) | 0/13 | 13/13 ✔ |
+| `AUTH-13` y `AUTH-15` (recomendados) | pendientes | ✔ |
+
+El checklist global de la copia local pasa de 11/37 a 27/37 y **sigue fallando**
+por controles de otros bloques. Esa copia no incluye todas las correcciones del
+grupo, así que no representa el estado integrado.
+
+Registros:
+[funcionales antes](evidencia/autenticacion-sesiones/antes-npm-test.txt) ·
+[funcionales después](evidencia/autenticacion-sesiones/despues-npm-test.txt) ·
+[bloques antes](evidencia/autenticacion-sesiones/antes-test-bloques.txt) ·
+[bloques después](evidencia/autenticacion-sesiones/despues-test-bloques.txt) ·
+[XSS del login antes](evidencia/autenticacion-sesiones/antes-test-xss-login.txt) ·
+[XSS del login después](evidencia/autenticacion-sesiones/despues-test-xss-login.txt) ·
+[pruebas propias](evidencia/autenticacion-sesiones/despues-regresiones.txt) ·
+[checklist antes](evidencia/autenticacion-sesiones/antes-check-security.txt) ·
+[checklist después](evidencia/autenticacion-sesiones/despues-check-security.txt) ·
+[tipos antes](evidencia/autenticacion-sesiones/antes-typecheck.txt) ·
+[tipos después](evidencia/autenticacion-sesiones/despues-typecheck.txt)
+
+Comandos para repetir la verificación dentro del contenedor:
+
+```sh
+npm test
+node --import tsx --test --test-concurrency=1 --test-name-pattern="Seguridad · (Autenticación y sesiones|Login|Fuerza bruta)" tests/seguridad.test.ts tests/seguridad-login.test.ts tests/seguridad-fuerza-bruta.test.ts
+node --import tsx --test --test-concurrency=1 tests/sesiones-regresion.test.ts tests/permisos-regresion.test.ts
+npm run check:security
+```
+
+### Dependencias de integración
+
+- **SQLi:** el login queda parametrizado y usa `bcrypt.compare` (VUL-01). Al unir
+  `pedidos.service.ts`, conservar la consulta parametrizada de `listar`,
+  `listarDeUsuario` y el campo `usuario_id`.
+- **XSS:** se modificaron `admin.html` y `admin.js` para pedir la contraseña
+  actual y se quitó la lista de claves de prueba del login.
+- **CSRF:** el token queda ligado al identificador de sesión. Se comprobó en la
+  copia local que, tras el logout, la cookie y el token anteriores reciben 403.
+  Siguen pendientes la limpieza en memoria de esos tokens y `Secure` en la cookie
+  `csrf_visitante`. El cambio de contraseña ahora exige también la actual.
+- **Configuración:** como apoyo se prepararon cambios en `errores.ts` (XSS-02 y
+  VAL-06) y `config.ts` (CFG-02), a confirmar y documentar en ese bloque. Con
+  HTTPS detrás de un proxy hay que configurar `trust proxy`. Si la app usa
+  `origen_app` sobre una base existente, ejecutar el script `03` como `postgres`.
+
+### Reflexión · Autenticación y sesiones
+
+Las contraseñas deben guardarse con un algoritmo lento y con salt, y la sesión
+debe ser imposible de adivinar, ilegible para JavaScript, temporal y revocable
+desde el servidor. En un proyecto real convendría usar una librería de sesiones
+mantenida con almacenamiento persistente, HTTPS obligatorio y un segundo factor
+para los administradores, sin cuentas con claves de fábrica.
+
+### Reflexión · Login y fuerza bruta
+
+Un mensaje genérico evita confirmar qué cuentas existen y el límite de intentos
+encarece adivinar claves. Ninguna medida alcanza sola: en producción se sumarían
+un contador compartido entre instancias, alertas y demoras progresivas, evaluando
+que el bloqueo no sirva para dejar afuera a usuarios legítimos.
+
+### Reflexión · Autorización
+
+Iniciar sesión no da derecho a todo. El servidor debe negar por defecto y
+comprobar en cada operación el rol y el dueño del dato; ocultar botones en la
+interfaz no protege. El dueño de cada registro conviene definirlo desde el diseño
+de la base, y cada ruta debe probarse con cada rol.
